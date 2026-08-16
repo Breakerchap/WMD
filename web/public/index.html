@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#f4f1e8">
     <title>WMD Studio</title>
     <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="/ux-overhaul.css">
   </head>
   <body data-theme="light">
     <section class="documents-page" id="documentsPage" hidden>
@@ -91,7 +92,7 @@
         <button class="underline-button" data-command="underline" type="button" title="Underline">U</button>
         <button class="strike-button" data-command="strikeThrough" type="button" title="Strikethrough">S</button>
         <button data-command="highlight" type="button" title="Highlight">Highlight</button>
-        <button id="stylePresetButton" type="button"  title="Create or edit the selected style">Style</button>
+        <button id="stylePresetButton" type="button" title="Create or edit the selected style">Style</button>
         <span class="toolbar-divider"></span>
         <button data-insert="link" type="button" title="Insert link (Ctrl+K)">Link</button>
         <button data-insert="image" type="button" title="Insert image">Image</button>
@@ -295,7 +296,9 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/text-ot.js"></script>
     <script src="/editor-sync.js"></script>
     <script src="/app.js"></script>
+    <script src="/ux-overhaul.js"></script>
   </body>
 </html>
