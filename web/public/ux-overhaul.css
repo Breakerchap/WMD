@@ -1,0 +1,300 @@
+/* UI/UX refinement layer. Kept separate from app.css so the overhaul is easy to review or revert. */
+
+:root {
+  --ux-radius-sm: 8px;
+  --ux-radius-md: 12px;
+  --ux-shadow-soft: 0 10px 30px rgb(34 39 35 / 8%);
+  --ux-border: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+body {
+  text-rendering: optimizeLegibility;
+}
+
+.topbar {
+  gap: 14px;
+  min-height: 58px;
+  padding-block: 8px;
+}
+
+.document-identity {
+  min-width: 150px;
+  max-width: min(34vw, 440px);
+}
+
+.document-identity strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  gap: 6px;
+}
+
+.topbar-actions .quiet-button,
+.topbar-actions .primary-button,
+.document-toolbar button,
+.document-toolbar select {
+  min-height: 34px;
+}
+
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ux-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.connection-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.document-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 14;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  box-shadow: 0 1px 0 var(--ux-border);
+}
+
+.document-toolbar > * {
+  flex: 0 0 auto;
+}
+
+.document-toolbar button:hover,
+.document-toolbar select:hover,
+.quiet-button:hover {
+  transform: translateY(-1px);
+}
+
+.document-toolbar button:active,
+.quiet-button:active,
+.primary-button:active {
+  transform: translateY(0);
+}
+
+.workspace-meta {
+  min-height: 42px;
+  gap: 12px;
+  padding-block: 6px;
+}
+
+.collaboration-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--ux-border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.collaboration-summary-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #8a8a8a;
+}
+
+.collaboration-summary[data-state="synced"] .collaboration-summary-dot {
+  background: #31845f;
+  box-shadow: 0 0 0 3px rgb(49 132 95 / 13%);
+}
+
+.collaboration-summary[data-state="saving"] .collaboration-summary-dot,
+.collaboration-summary[data-state="connecting"] .collaboration-summary-dot {
+  background: #b47b25;
+  box-shadow: 0 0 0 3px rgb(180 123 37 / 13%);
+}
+
+.collaboration-summary[data-state="problem"] .collaboration-summary-dot,
+.collaboration-summary[data-state="offline"] .collaboration-summary-dot {
+  background: #b94f45;
+  box-shadow: 0 0 0 3px rgb(185 79 69 / 13%);
+}
+
+.presence {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.presence .avatar {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  margin-left: -6px;
+  border: 2px solid var(--surface, #fff);
+  box-shadow: 0 2px 7px rgb(0 0 0 / 12%);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.presence .avatar:first-child {
+  margin-left: 0;
+}
+
+.presence .avatar:not(:disabled):hover,
+.presence .avatar:not(:disabled):focus-visible {
+  z-index: 2;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 5px 12px rgb(0 0 0 / 18%);
+}
+
+.editor-status {
+  margin-left: auto;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+#saveStatus {
+  font-weight: 650;
+}
+
+.workspace {
+  min-height: 0;
+}
+
+.editor-zone,
+.preview-zone {
+  min-width: 0;
+}
+
+.editor-surface,
+.preview-zone iframe {
+  border-radius: var(--ux-radius-md);
+}
+
+.editor-surface {
+  box-shadow: inset 0 0 0 1px var(--ux-border);
+}
+
+.source-editor {
+  caret-color: currentColor;
+}
+
+.panel-menu,
+dialog {
+  box-shadow: var(--ux-shadow-soft);
+}
+
+.documents-card {
+  box-shadow: var(--ux-shadow-soft);
+}
+
+.ux-shortcut-hint {
+  position: fixed;
+  right: 16px;
+  bottom: 14px;
+  z-index: 30;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--ux-border);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: color-mix(in srgb, Canvas 92%, transparent);
+  color: CanvasText;
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(5px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.ux-shortcut-hint[data-visible="true"] {
+  opacity: .9;
+  transform: translateY(0);
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .document-identity {
+    max-width: 50vw;
+  }
+
+  .workspace-meta {
+    flex-wrap: wrap;
+  }
+
+  .editor-status {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .brand > span:last-child,
+  .document-label,
+  #localSaveStatus {
+    display: none;
+  }
+
+  .topbar {
+    gap: 8px;
+  }
+
+  .document-identity {
+    flex: 1 1 120px;
+    max-width: none;
+  }
+
+  .mode-switch {
+    margin-left: auto;
+  }
+
+  .connection-status {
+    order: -1;
+  }
+
+  .workspace-meta {
+    padding-inline: 10px;
+  }
+
+  .collaboration-summary {
+    max-width: 48vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .presence .avatar:nth-child(n+5) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-toolbar button,
+  .quiet-button,
+  .primary-button,
+  .presence .avatar,
+  .ux-shortcut-hint {
+    transition: none !important;
+  }
+}
