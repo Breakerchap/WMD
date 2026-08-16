@@ -86,9 +86,10 @@ function configMetadata(raw) {
   return { raw: String(raw || ""), values, styles };
 }
 
-function isBlockStart(record) {
+function isBlockStart(record, markers = new Map()) {
   const line = record.text;
-  return /^@title\s+/.test(line)
+  return Boolean(customMarkerAtLine(line, markers))
+    || /^@title\s+/.test(line)
     || /^@collapse(?:\s|$)/.test(line)
     || /^@style(?:\s|$)/.test(line)
     || /^@toc(?:\s|$)/.test(line)
@@ -108,7 +109,27 @@ function readDelimited(records, start, endExpression) {
   return { end, raw: records.slice(start, end).map((record) => record.raw).join(""), closed };
 }
 
-function parseTabContent(raw) {
+function customMarkers(config) {
+  const markers = new Map();
+  for (const [name, value] of Object.entries(config && config.styles || {})) {
+    const body = String(value || "").replace(/^\{|\}\s*;?\s*$/g, "");
+    const match = body.match(/(?:^|;)\s*wmd-formatting\s*:\s*([^;]+?)\s*(?:;|$)/i);
+    if (!match) continue;
+    const marker = match[1].trim();
+    if (!marker || marker.startsWith("!") || /^#{1,6}$/.test(marker) || /^@(?:title|style)$/i.test(marker)) continue;
+    markers.set(marker.toLowerCase(), { marker, style: String(name || ""), level: /^heading\b/i.test(String(name || "")) ? 2 : 0 });
+  }
+  return markers;
+}
+
+function customMarkerAtLine(line, markers) {
+  const source = String(line || "");
+  return [...markers.values()]
+    .sort((left, right) => right.marker.length - left.marker.length)
+    .find((style) => source.startsWith(style.marker) && (source.length === style.marker.length || /\s/.test(source[style.marker.length]))) || null;
+}
+
+function parseTabContent(raw, markers = new Map()) {
   const records = lineRecords(raw);
   const blocks = [];
   let pending = "";
@@ -130,6 +151,15 @@ function parseTabContent(raw) {
 
     if (/^@title\s+/.test(line)) {
       add(createBlock("title", record.raw, { text: line.slice("@title ".length).trim() }));
+      index += 1;
+      continue;
+    }
+
+    const customStyle = customMarkerAtLine(line, markers);
+    if (customStyle) {
+      add(createBlock(customStyle.level ? "heading" : "paragraph", record.raw, {
+        text: line.slice(customStyle.marker.length).trim(), level: customStyle.level || undefined, formatting: customStyle.marker, style: customStyle.style,
+      }));
       index += 1;
       continue;
     }
@@ -209,7 +239,7 @@ function parseTabContent(raw) {
 
     const start = index;
     index += 1;
-    while (index < records.length && records[index].text.trim() && !isBlockStart(records[index])) index += 1;
+    while (index < records.length && records[index].text.trim() && !isBlockStart(records[index], markers)) index += 1;
     const paragraphRaw = records.slice(start, index).map((entry) => entry.raw).join("");
     add(createBlock("paragraph", paragraphRaw, { text: textWithoutLineEnding(paragraphRaw) }));
   }
@@ -224,6 +254,10 @@ function parseWmd(source) {
   const tabs = [];
   const firstTabStart = tabIndexes.length ? records[tabIndexes[0]].start : text.length;
   const preamble = text.slice(0, firstTabStart);
+  const configMatch = preamble.match(/(^|[\r\n])@config\s*(?:\r?\n|\r)([\s\S]*?)(?:^|[\r\n])@endconfig\s*(?=\r?\n|\r|$)/m);
+  const configRaw = configMatch ? configMatch[0].replace(/^\r?\n|\r/, "") : "";
+  const config = configMetadata(configRaw);
+  const markers = customMarkers(config);
 
   for (let tabIndex = 0; tabIndex < tabIndexes.length; tabIndex += 1) {
     const start = tabIndexes[tabIndex];
@@ -231,7 +265,7 @@ function parseWmd(source) {
     const header = records[start];
     const attrs = tabAttributes(header.text);
     const contentRaw = records.slice(start + 1, end).map((record) => record.raw).join("");
-    const content = parseTabContent(contentRaw);
+    const content = parseTabContent(contentRaw, markers);
     tabs.push({
       type: "tab",
       id: makeId("tab", attrs.name),
@@ -243,7 +277,7 @@ function parseWmd(source) {
   }
 
   if (!tabs.length && text.trim()) {
-    const content = parseTabContent(text);
+    const content = parseTabContent(text, markers);
     tabs.push({
       type: "tab",
       id: makeId("tab", "Main"),
@@ -254,20 +288,19 @@ function parseWmd(source) {
     });
   }
 
-  const configMatch = preamble.match(/(^|[\r\n])@config\s*(?:\r?\n|\r)([\s\S]*?)(?:^|[\r\n])@endconfig\s*(?=\r?\n|\r|$)/m);
-  const configRaw = configMatch ? configMatch[0].replace(/^\r?\n|\r/, "") : "";
   return {
     type: "document",
     version: 1,
     source: text,
     preamble,
-    config: configMetadata(configRaw),
+    config,
     tabs,
     diagnostics: tabs.flatMap((tab) => tab.blocks.flatMap((block) => block.diagnostics || [])),
   };
 }
 
 function renderBlock(block) {
+  if (block.type === "heading" && block.attrs.formatting) return block.attrs.formatting + " " + (block.attrs.text || "") + (block.lineEnding || "\n");
   if (block.type === "title") return `@title ${block.attrs.text || ""}${block.lineEnding || "\n"}`;
   if (block.type === "heading") return `${"#".repeat(Number(block.attrs.level) || 1)} ${block.attrs.text || ""}${block.lineEnding || "\n"}`;
   if (block.type === "paragraph") return `${block.attrs.text == null ? textWithoutLineEnding(block.raw) : block.attrs.text}${block.lineEnding || "\n"}`;
@@ -329,6 +362,7 @@ function renderWmdAst(ast) {
 
 module.exports = {
   configMetadata,
+  customMarkers,
   parseWmd,
   reconcileAst,
   renderWmdAst,

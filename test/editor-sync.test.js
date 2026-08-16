@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { EditorState } = require("prosemirror-state");
+const { EditorState, TextSelection } = require("prosemirror-state");
+const { splitBlock } = require("prosemirror-commands");
 const { parseWmd, reconcileAst, stringifyWmd } = require("../wmd-ast");
 const { applyAstToProseMirror, getWmdSchema, proseMirrorToWmdAst, wmdAstToProseMirror } = require("../wmd-prosemirror");
 
@@ -67,6 +68,42 @@ test("unfinished directives become recovery nodes rather than rejecting the sour
   assert.equal(block.type, "raw");
   assert.match(block.diagnostics[0], /Unclosed callout/);
   assert.equal(stringifyWmd(ast), source);
+});
+
+test("config-defined custom heading markers become editable heading nodes", () => {
+  const source = [
+    "@config",
+    "Heading A: {wmd-formatting: @headingA; keybind: ctrl+shift+a; size: 60px; font: arial; bold: true; italic: true};",
+    "Heading B: {wmd-formatting: //; keybind: ctrl+shift+;; size: 50px; font: verdana; strikethrough: true; italic: true};",
+    "@endconfig",
+    "",
+    "@tab Home",
+    "",
+    "@headingA Custom heading",
+    "",
+    "// Another custom heading",
+    "",
+  ].join("\n");
+  const ast = parseWmd(source);
+  const block = ast.tabs[0].blocks[0];
+
+  assert.equal(block.type, "heading");
+  assert.equal(block.attrs.formatting, "@headingA");
+  assert.equal(block.attrs.style, "Heading A");
+  assert.equal(stringifyWmd(ast), source);
+  assert.equal(wmdAstToProseMirror(ast).firstChild.firstChild.attrs.style, "Heading A");
+  assert.equal(ast.tabs[0].blocks[1].attrs.formatting, "//");
+});
+
+test("document Enter splits a paragraph inside a WMD tab", () => {
+  const schema = getWmdSchema();
+  const document = wmdAstToProseMirror(parseWmd("@tab Home\n\nFirst\n"), schema);
+  let state = EditorState.create({ schema, doc: document });
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 3)));
+  const handled = splitBlock(state, (transaction) => { state = state.apply(transaction); });
+
+  assert.equal(handled, true);
+  assert.equal(state.doc.firstChild.childCount, 2);
 });
 
 test("small source edits become a targeted ProseMirror transaction, not a document replacement", () => {

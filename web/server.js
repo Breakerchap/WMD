@@ -48,7 +48,7 @@ const DEFAULT_DOCUMENT_SOURCE = [
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -70,6 +70,10 @@ function yStateFilePath(id) {
   return path.join(DATA_ROOT, `${normalizeDocumentId(id)}.yjs`);
 }
 
+function metadataFilePath(id) {
+  return path.join(DATA_ROOT, normalizeDocumentId(id) + ".meta.json");
+}
+
 function atomicWrite(filePath, contents) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
@@ -80,6 +84,21 @@ function atomicWrite(filePath, contents) {
 function readSnapshot(id) {
   const filePath = documentFilePath(id);
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : createStarterDocument();
+}
+
+function readDocumentMetadata(id) {
+  const filePath = metadataFilePath(id);
+  if (!fs.existsSync(filePath)) return {};
+  try {
+    const metadata = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return metadata && typeof metadata === "object" ? metadata : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeDocumentMetadata(id, metadata) {
+  atomicWrite(metadataFilePath(id), JSON.stringify(metadata));
 }
 
 function metadataFromRecord(record) {
@@ -154,6 +173,10 @@ function getCollabDocument(id) {
     // state file may seed the authoritative structured document.
     initialiseFromWmd(record, readSnapshot(normalizedId));
     atomicWrite(yStatePath, Buffer.from(Y.encodeStateAsUpdate(ydoc)));
+  }
+  if (!record.meta.get("title")) {
+    const metadata = readDocumentMetadata(normalizedId);
+    record.meta.set("title", String(metadata.title || titleFromSource(readSnapshot(normalizedId), normalizedId)).slice(0, 120));
   }
 
   ydoc.on("update", (update, origin) => {
@@ -245,7 +268,10 @@ function titleFromSource(source, fallback) {
 }
 
 function documentSummary(id, source, updatedAt) {
-  return { id, title: titleFromSource(source, id), updatedAt: updatedAt || new Date().toISOString() };
+  const record = collabDocuments.get(id);
+  const metadata = readDocumentMetadata(id);
+  const title = String(record && record.meta.get("title") || metadata.title || titleFromSource(source, id)).trim() || id.replace(/[-_]+/g, " ");
+  return { id, title, updatedAt: updatedAt || new Date().toISOString() };
 }
 
 function listDocuments() {
@@ -273,7 +299,23 @@ function createDocument(payload = {}) {
   }
   const source = createStarterDocument();
   atomicWrite(filePath, source);
+  const title = String(payload.title || id.replace(/[-_]+/g, " ")).trim().slice(0, 120) || id.replace(/[-_]+/g, " ");
+  writeDocumentMetadata(id, { title });
   return documentSummary(id, source);
+}
+
+function renameDocumentTitle(id, title) {
+  const normalized = normalizeDocumentId(id);
+  const nextTitle = String(title || "").replace(/[\r\n]/g, " ").trim().slice(0, 120);
+  if (!nextTitle) {
+    const error = new Error("Document title cannot be empty.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const record = collabDocuments.get(normalized);
+  if (record) record.meta.set("title", nextTitle);
+  writeDocumentMetadata(normalized, { ...readDocumentMetadata(normalized), title: nextTitle });
+  return documentSummary(normalized, record ? sourceFromRecord(record) : readSnapshot(normalized));
 }
 
 function deleteDocument(id) {
@@ -294,7 +336,7 @@ function deleteDocument(id) {
     record.ydoc.destroy();
     collabDocuments.delete(normalized);
   }
-  const paths = [documentFilePath(normalized), yStateFilePath(normalized)];
+  const paths = [documentFilePath(normalized), yStateFilePath(normalized), metadataFilePath(normalized)];
   if (!paths.some((filePath) => fs.existsSync(filePath))) {
     const error = new Error("Document not found.");
     error.statusCode = 404;
@@ -403,6 +445,10 @@ async function handleRequest(request, response) {
       const record = collabDocuments.get(id);
       const source = record ? sourceFromRecord(record) : readSnapshot(id);
       return sendJson(response, 200, { document: { ...documentSummary(id, source), source, hasYState: fs.existsSync(yStateFilePath(id)) } });
+    }
+    if (documentMatch && request.method === "PATCH") {
+      const payload = JSON.parse((await readRequestBody(request)).toString("utf8") || "{}");
+      return sendJson(response, 200, { document: renameDocumentTitle(decodeURIComponent(documentMatch[1]), payload.title) });
     }
     if (documentMatch && request.method === "DELETE") return sendJson(response, 200, { document: deleteDocument(decodeURIComponent(documentMatch[1])) });
     if (request.method === "POST" && url.pathname === "/api/compile") return sendJson(response, 200, compile(String(JSON.parse((await readRequestBody(request)).toString("utf8")).source || "")));

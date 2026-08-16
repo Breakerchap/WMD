@@ -42,18 +42,13 @@
         </div>
         <div class="document-identity">
           <span class="document-label">Shared document</span>
-          <strong id="documentName">Loading...</strong>
-        </div>
-        <div class="mode-switch" role="group" aria-label="Editor mode">
-          <button id="documentModeButton" type="button" aria-pressed="true">Document</button>
-          <button id="wmdModeButton" type="button" aria-pressed="false">WMD</button>
+          <strong id="documentName" title="Click to rename this document">Loading...</strong>
         </div>
         <div class="topbar-actions">
           <span class="connection-status" id="connectionStatus">Connecting</span>
           <button class="quiet-button" id="documentsButton" type="button">Documents</button>
           <button class="quiet-button" id="uploadButton" type="button">Upload</button>
           <input id="importInput" type="file" accept=".md,.markdown,.wmd,.docx" hidden>
-          <button class="quiet-button" id="renameButton" type="button">Rename</button>
           <button class="quiet-button" id="panelsButton" type="button" aria-expanded="false">Panels</button>
           <button class="quiet-button" id="settingsButton" type="button">Settings</button>
           <button class="quiet-button" id="shareButton" type="button">Share</button>
@@ -90,8 +85,7 @@
         <button data-command="italic" type="button" title="Italic (Ctrl+I)"><i>I</i></button>
         <button class="underline-button" data-command="underline" type="button" title="Underline">U</button>
         <button class="strike-button" data-command="strikeThrough" type="button" title="Strikethrough">S</button>
-        <button data-command="highlight" type="button" title="Highlight">Highlight</button>
-        <button id="stylePresetButton" type="button"  title="Create or edit the selected style">Style</button>
+        <button class="highlight-cycle" data-command="highlight" type="button" title="Cycle yellow, orange, and red highlighting">Highlight</button>
         <span class="toolbar-divider"></span>
         <button data-insert="link" type="button" title="Insert link (Ctrl+K)">Link</button>
         <button data-insert="image" type="button" title="Insert image">Image</button>
@@ -165,7 +159,7 @@
             <span class="eyebrow">Personal workspace</span>
             <h2>Editor settings</h2>
           </div>
-          <button class="icon-button settings-close" value="cancel" aria-label="Close settings" type="submit">x</button>
+          <button class="icon-button settings-close" data-dialog-close aria-label="Close settings" type="button">x</button>
         </div>
         <label class="setting-field">Username
           <input id="usernameInput" maxlength="36" autocomplete="nickname" placeholder="Your name">
@@ -192,12 +186,6 @@
             <option value="graphite">White / dark grey</option>
           </select>
         </label>
-        <label class="setting-field">Default editor mode
-          <select id="defaultModeInput">
-            <option value="document">Document</option>
-            <option value="wmd">Raw WMD</option>
-          </select>
-        </label>
         <section class="macros-section">
           <div>
             <span class="eyebrow">Typing shortcuts</span>
@@ -208,7 +196,7 @@
           <button class="wide-button" id="addMacroButton" type="button">Add macro</button>
         </section>
         <div class="settings-actions">
-          <button class="quiet-button" value="cancel" type="submit">Cancel</button>
+          <button class="quiet-button" data-dialog-close type="button">Cancel</button>
           <button class="primary-button" id="saveSettingsButton" value="default" type="submit">Save settings</button>
         </div>
       </form>
@@ -221,12 +209,12 @@
             <span class="eyebrow">Document insert</span>
             <h2 id="insertDialogTitle">Insert</h2>
           </div>
-          <button class="icon-button settings-close" value="cancel" aria-label="Close insert dialog" type="submit">x</button>
+          <button class="icon-button settings-close" data-dialog-close aria-label="Close insert dialog" type="button">x</button>
         </div>
         <p class="insert-dialog-description" id="insertDialogDescription"></p>
         <div class="insert-fields" id="insertFields"></div>
         <div class="settings-actions">
-          <button class="quiet-button" value="cancel" type="submit">Cancel</button>
+          <button class="quiet-button" data-dialog-close type="button">Cancel</button>
           <button class="primary-button" id="confirmInsertButton" value="default" type="submit">Insert</button>
         </div>
       </form>
@@ -239,13 +227,13 @@
             <span class="eyebrow">Document details</span>
             <h2>Rename document</h2>
           </div>
-          <button class="icon-button settings-close" value="cancel" aria-label="Close rename dialog" type="submit">x</button>
+          <button class="icon-button settings-close" data-dialog-close aria-label="Close rename dialog" type="button">x</button>
         </div>
         <label class="setting-field">Document title
           <input id="renameInput" maxlength="120" autocomplete="off" required>
         </label>
         <div class="settings-actions">
-          <button class="quiet-button" value="cancel" type="submit">Cancel</button>
+          <button class="quiet-button" data-dialog-close type="button">Cancel</button>
           <button class="primary-button" id="confirmRenameButton" value="default" type="submit">Rename</button>
         </div>
       </form>
@@ -258,7 +246,7 @@
             <span class="eyebrow">Search document</span>
             <h2>Find and replace</h2>
           </div>
-          <button class="icon-button settings-close" value="cancel" aria-label="Close find and replace" type="submit">x</button>
+          <button class="icon-button settings-close" data-dialog-close aria-label="Close find and replace" type="button">x</button>
         </div>
         <label class="setting-field">Find
           <input id="findInput" autocomplete="off" required>
@@ -275,6 +263,23 @@
       </form>
     </dialog>
 
+    <dialog class="confirm-dialog" id="confirmDialog">
+      <form method="dialog" id="confirmForm">
+        <div class="settings-heading">
+          <div>
+            <span class="eyebrow">Confirm action</span>
+            <h2>Are you sure?</h2>
+          </div>
+          <button class="icon-button settings-close" data-dialog-close aria-label="Close confirmation" type="button">x</button>
+        </div>
+        <p class="insert-dialog-description" id="confirmMessage"></p>
+        <div class="settings-actions">
+          <button class="quiet-button" id="confirmCancelButton" data-dialog-close type="button">Cancel</button>
+          <button class="primary-button" id="confirmActionButton" value="default" type="submit">Continue</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="share-dialog" id="shareDialog">
       <form method="dialog" id="shareForm">
         <div class="settings-heading">
@@ -282,7 +287,7 @@
             <span class="eyebrow">Collaboration</span>
             <h2>Share document</h2>
           </div>
-          <button class="icon-button settings-close" value="cancel" aria-label="Close share dialog" type="submit">x</button>
+          <button class="icon-button settings-close" data-dialog-close aria-label="Close share dialog" type="button">x</button>
         </div>
         <p class="insert-dialog-description">Copy this link to let collaborators join this document.</p>
         <input class="share-link-input" id="shareLinkInput" readonly aria-label="Collaboration link">
