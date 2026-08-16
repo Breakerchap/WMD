@@ -1,58 +1,22 @@
 (function initEditorSync(root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
   if (root) root.WmdEditorSync = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, () => {
+})(typeof globalThis !== "undefined" ? globalThis : this, (root) => {
   "use strict";
 
-  function appendPart(target, part) {
-    if (part === 0 || part === "") return;
-    const previous = target[target.length - 1];
-    if (typeof part === "number" && typeof previous === "number" && Math.sign(part) === Math.sign(previous)) target[target.length - 1] += part;
-    else if (typeof part === "string" && typeof previous === "string") target[target.length - 1] += part;
-    else target.push(part);
-  }
+  const textOT = root && root.WmdTextOT
+    ? root.WmdTextOT
+    : typeof require === "function"
+      ? require("./text-ot")
+      : null;
 
-  function applyOperation(source, operation) {
-    let index = 0;
-    let output = "";
-    for (const part of operation && operation.ops || []) {
-      if (typeof part === "string") output += part;
-      else if (part > 0) {
-        output += source.slice(index, index + part);
-        index += part;
-      } else if (part < 0) index += -part;
-    }
-    if (index !== source.length) throw new Error("Text operation does not cover its source.");
-    return output;
-  }
+  if (!textOT) throw new Error("WmdTextOT must be loaded before editor-sync.js.");
 
-  // Positions at a concurrent insertion need an explicit affinity. A local author
-  // stays after the text they inserted; other cursors remain before it.
-  function mapOffsetThroughOperation(offset, operation, affinity = "before") {
-    const sourceOffset = Math.max(0, Number(offset) || 0);
-    let consumed = 0;
-    let produced = 0;
-    for (const part of operation && operation.ops || []) {
-      if (typeof part === "string") {
-        if (sourceOffset === consumed && affinity !== "after") return produced;
-        produced += part.length;
-        continue;
-      }
-      if (part > 0) {
-        if (sourceOffset < consumed + part) return produced + Math.max(0, sourceOffset - consumed);
-        consumed += part;
-        produced += part;
-        if (sourceOffset === consumed && affinity !== "after") return produced;
-        continue;
-      }
-      const removed = -part;
-      if (sourceOffset < consumed + removed) return produced;
-      consumed += removed;
-      if (sourceOffset === consumed && affinity !== "after") return produced;
-    }
-    return produced + Math.max(0, sourceOffset - consumed);
-  }
+  const appendPart = textOT.append;
+  const applyOperation = textOT.apply;
+  const mapOffsetThroughOperation = textOT.mapOffset;
+  const transformOperations = textOT.transform;
 
   // Converts a local optimistic position back to the current server text. Any
   // position inside locally inserted text maps to that insertion's source point.
@@ -60,7 +24,7 @@
     const targetOffset = Math.max(0, Number(offset) || 0);
     let consumed = 0;
     let produced = 0;
-    for (const part of operation && operation.ops || []) {
+    for (const part of textOT.normalize(operation).ops) {
       if (typeof part === "string") {
         if (targetOffset <= produced + part.length) return consumed;
         produced += part.length;
@@ -176,46 +140,6 @@
       diagonals = next;
     }
     return simpleOperationFromDiff(before, after);
-  }
-
-  function consumePart(part, length) {
-    if (typeof part === "string") return part.slice(length);
-    return part > 0 ? part - length : part + length;
-  }
-
-  function transformOperations(left, right) {
-    const leftParts = left.ops.slice();
-    const rightParts = right.ops.slice();
-    let leftPart = leftParts.shift();
-    let rightPart = rightParts.shift();
-    const leftPrime = [];
-    const rightPrime = [];
-    while (leftPart !== undefined || rightPart !== undefined) {
-      if (typeof leftPart === "string") {
-        appendPart(leftPrime, leftPart);
-        appendPart(rightPrime, leftPart.length);
-        leftPart = leftParts.shift();
-        continue;
-      }
-      if (typeof rightPart === "string") {
-        appendPart(leftPrime, rightPart.length);
-        appendPart(rightPrime, rightPart);
-        rightPart = rightParts.shift();
-        continue;
-      }
-      if (leftPart === undefined || rightPart === undefined) throw new Error("Incompatible text operations.");
-      const length = Math.min(Math.abs(leftPart), Math.abs(rightPart));
-      if (leftPart > 0 && rightPart > 0) {
-        appendPart(leftPrime, length);
-        appendPart(rightPrime, length);
-      } else if (leftPart < 0 && rightPart > 0) appendPart(leftPrime, -length);
-      else if (leftPart > 0 && rightPart < 0) appendPart(rightPrime, -length);
-      leftPart = consumePart(leftPart, length);
-      rightPart = consumePart(rightPart, length);
-      if (leftPart === 0) leftPart = leftParts.shift();
-      if (rightPart === 0) rightPart = rightParts.shift();
-    }
-    return [{ ops: leftPrime }, { ops: rightPrime }];
   }
 
   function rebaseOperationThroughExternal(operation, externalOperations) {
