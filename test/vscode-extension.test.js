@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { computeSmartPairAction } = require("../wmd-vscode-support/smart-edit.js");
+const { computeSmartPairAction } = require("../vscode-extension/smart-edit.js");
 
 test("smart typing pairs delimiters in empty space", () => {
   assert.deepEqual(
