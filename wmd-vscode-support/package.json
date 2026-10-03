@@ -1,7 +1,7 @@
 {
-  "name": "wmd-support",
-  "displayName": "Wiki Markdown (.wmd) Support v2.1",
-  "description": "Syntax highlighting, snippets, auto-pairs, autocomplete, and basic formatting for WMD v2.1 files.",
+  "name": "wikimd",
+  "displayName": "WikiMD",
+  "description": "Language support, formatting, snippets, and live preview for WikiMD (.wmd) files.",
   "version": "0.3.0",
   "publisher": "local",
   "engines": {
@@ -86,6 +86,36 @@
         "editor.autoClosingDelete": "always",
         "editor.formatOnType": false
       }
+    },
+    "configuration": {
+      "title": "WikiMD",
+      "properties": {
+        "wmd.compilerPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Path to wmd-compiler.js. Leave empty to search workspace roots and the WikiMD repository."
+        },
+        "wmd.nodePath": {
+          "type": "string",
+          "default": "node",
+          "scope": "machine",
+          "description": "Node.js executable used to run the WikiMD compiler."
+        },
+        "wmd.previewPort": {
+          "type": "number",
+          "default": 4312,
+          "minimum": 1,
+          "maximum": 65535,
+          "scope": "resource",
+          "description": "Port used by the WikiMD live preview server."
+        }
+      }
     }
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Breakerchap/WikiMD.git"
   }
 }
