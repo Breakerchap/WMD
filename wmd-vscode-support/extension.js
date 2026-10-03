@@ -4,13 +4,16 @@ const cp = require("child_process");
 const vscode = require("vscode");
 const { computeSmartPairAction } = require("./smart-edit");
 
-const PREVIEW_PORT = 4312;
+const DEFAULT_PREVIEW_PORT = 4312;
 let previewProcess = null;
 let previewFilePath = "";
+let activePreviewPort = null;
 let outputChannel = null;
+let extensionRoot = "";
 
 function activate(context) {
-  outputChannel = vscode.window.createOutputChannel("WMD Preview");
+  extensionRoot = context.extensionPath;
+  outputChannel = vscode.window.createOutputChannel("WikiMD Preview");
   context.subscriptions.push(outputChannel);
 
   context.subscriptions.push(
@@ -73,8 +76,11 @@ function activate(context) {
       }
 
       await editor.document.save();
-      await startOrRestartPreview(editor.document);
-      await vscode.commands.executeCommand("simpleBrowser.show", `http://127.0.0.1:${PREVIEW_PORT}`);
+      const port = getPreviewPort();
+      const started = await startOrRestartPreview(editor.document, port);
+      if (!started) return;
+
+      await vscode.commands.executeCommand("simpleBrowser.show", `http://127.0.0.1:${port}`);
     })
   );
 
@@ -145,31 +151,81 @@ async function applySmartTypingAction(editor, action, text) {
   await vscode.commands.executeCommand("default:type", { text });
 }
 
-async function startOrRestartPreview(document) {
+function getPreviewPort() {
+  const configured = Number(vscode.workspace.getConfiguration("wmd").get("previewPort", DEFAULT_PREVIEW_PORT));
+  return Number.isInteger(configured) && configured >= 1 && configured <= 65535
+    ? configured
+    : DEFAULT_PREVIEW_PORT;
+}
+
+function getNodePath() {
+  const configured = String(vscode.workspace.getConfiguration("wmd").get("nodePath", "node") || "").trim();
+  return configured || "node";
+}
+
+function findCompilerPath() {
+  const folders = vscode.workspace.workspaceFolders || [];
+  const configured = String(vscode.workspace.getConfiguration("wmd").get("compilerPath", "") || "").trim();
+  const candidates = [];
+
+  if (configured) {
+    if (path.isAbsolute(configured)) {
+      candidates.push(configured);
+    } else {
+      for (const folder of folders) {
+        candidates.push(path.resolve(folder.uri.fsPath, configured));
+      }
+      candidates.push(path.resolve(configured));
+    }
+  }
+
+  for (const folder of folders) {
+    candidates.push(path.join(folder.uri.fsPath, "wmd-compiler.js"));
+  }
+
+  if (extensionRoot) {
+    candidates.push(path.resolve(extensionRoot, "..", "wmd-compiler.js"));
+  }
+
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      if (fs.statSync(candidate).isFile()) return candidate;
+    } catch {
+      // Keep searching.
+    }
+  }
+
+  return null;
+}
+
+async function startOrRestartPreview(document, port) {
   const compilerPath = findCompilerPath();
   if (!compilerPath) {
-    vscode.window.showErrorMessage("Could not find wmd-compiler.js for live preview.");
-    return;
+    vscode.window.showErrorMessage(
+      "Could not find wmd-compiler.js. Open the WikiMD repo as your workspace or set wmd.compilerPath."
+    );
+    return false;
   }
 
   const inputPath = document.fileName;
   const parsed = path.parse(inputPath);
   const outputPath = path.join(parsed.dir, `${parsed.name}.html`);
   const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-  const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : path.dirname(compilerPath);
+  const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : path.dirname(inputPath);
 
-  if (previewProcess && previewFilePath === inputPath) {
-    return;
+  if (previewProcess && previewFilePath === inputPath && activePreviewPort === port) {
+    return true;
   }
 
   stopPreviewProcess();
   previewFilePath = inputPath;
+  activePreviewPort = port;
   outputChannel.clear();
   outputChannel.appendLine(`Starting preview for ${path.basename(inputPath)}`);
 
-  previewProcess = cp.spawn(
-    process.execPath,
-    [compilerPath, "--serve", "--watch", inputPath, outputPath, "--port", String(PREVIEW_PORT)],
+  const child = cp.spawn(
+    getNodePath(),
+    [compilerPath, "--serve", inputPath, outputPath, "--port", String(port)],
     {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -177,43 +233,46 @@ async function startOrRestartPreview(document) {
     }
   );
 
-  previewProcess.stdout.on("data", (chunk) => {
+  previewProcess = child;
+
+  child.stdout.on("data", (chunk) => {
     outputChannel.append(chunk.toString());
   });
 
-  previewProcess.stderr.on("data", (chunk) => {
+  child.stderr.on("data", (chunk) => {
     outputChannel.append(chunk.toString());
   });
 
-  previewProcess.on("exit", (code, signal) => {
+  child.on("error", (error) => {
+    outputChannel.appendLine(`Preview failed: ${error.message}`);
+    outputChannel.show(true);
+    if (previewProcess === child) {
+      previewProcess = null;
+      previewFilePath = "";
+      activePreviewPort = null;
+    }
+  });
+
+  child.on("exit", (code, signal) => {
     outputChannel.appendLine(`Preview stopped${code !== null ? ` (code ${code})` : ""}${signal ? ` (${signal})` : ""}`);
-    previewProcess = null;
-    previewFilePath = "";
+    if (previewProcess === child) {
+      previewProcess = null;
+      previewFilePath = "";
+      activePreviewPort = null;
+    }
   });
+
+  return true;
 }
 
 function stopPreviewProcess() {
-  if (!previewProcess) {
-    return;
-  }
+  if (!previewProcess) return;
 
   const running = previewProcess;
   previewProcess = null;
   previewFilePath = "";
+  activePreviewPort = null;
   running.kill();
-}
-
-function findCompilerPath() {
-  const folders = vscode.workspace.workspaceFolders || [];
-
-  for (const folder of folders) {
-    const candidate = path.join(folder.uri.fsPath, "wmd-compiler.js");
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
 }
 
 function formatWmd(text) {
