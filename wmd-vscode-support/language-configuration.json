@@ -92,8 +92,8 @@
   ],
   "folding": {
     "markers": {
-      "start": "^\\s*@(tab|config)\\b",
-      "end": "^\\s*@endconfig\\b"
+      "start": "^\\s*(?:@config\\b|@collapse\\b|@style\\b|!(?:note|tip|info|warning|danger|rule|example)\\b)",
+      "end": "^\\s*(?:@endconfig\\b|@endcollapse\\b|@end(?:style)?\\b|!end\\b)"
     }
   }
 }
