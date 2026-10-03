@@ -1,0 +1,121 @@
+{
+  "name": "wikimd",
+  "displayName": "WikiMD",
+  "description": "Language support, formatting, snippets, and live preview for WikiMD (.wmd) files.",
+  "version": "0.3.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:wmd",
+    "onCommand:wmd.openLivePreview"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "wmd",
+        "aliases": [
+          "Wiki Markdown",
+          "WMD",
+          "wmd"
+        ],
+        "extensions": [
+          ".wmd"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "wmd",
+        "scopeName": "text.wmd",
+        "path": "./syntaxes/wmd.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "wmd",
+        "path": "./snippets/wmd.code-snippets"
+      }
+    ],
+    "themes": [
+      {
+        "label": "WMD Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/wmd-dark-color-theme.json"
+      },
+      {
+        "label": "WMD Light",
+        "uiTheme": "vs",
+        "path": "./themes/wmd-light-color-theme.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "wmd.openLivePreview",
+        "title": "WMD: Open Live Preview",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "wmd.openLivePreview",
+          "when": "resourceExtname == .wmd",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configurationDefaults": {
+      "[wmd]": {
+        "editor.wordWrap": "on",
+        "editor.quickSuggestions": {
+          "other": true,
+          "comments": false,
+          "strings": true
+        },
+        "editor.autoClosingBrackets": "always",
+        "editor.autoClosingQuotes": "always",
+        "editor.autoClosingDelete": "always",
+        "editor.formatOnType": false
+      }
+    },
+    "configuration": {
+      "title": "WikiMD",
+      "properties": {
+        "wmd.compilerPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Path to wmd-compiler.js. Leave empty to search workspace roots and the WikiMD repository."
+        },
+        "wmd.nodePath": {
+          "type": "string",
+          "default": "node",
+          "scope": "machine",
+          "description": "Node.js executable used to run the WikiMD compiler."
+        },
+        "wmd.previewPort": {
+          "type": "number",
+          "default": 4312,
+          "minimum": 1,
+          "maximum": 65535,
+          "scope": "resource",
+          "description": "Port used by the WikiMD live preview server."
+        }
+      }
+    }
+  },
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Breakerchap/WikiMD.git"
+  }
+}

@@ -1,9 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { compile, compileIncremental, parseArgs } = require("../wmd-compiler.js");
-const { parseOptions } = require("../web/server.js");
-const { operationFromTextDiff } = require("../web/public/editor-sync.js");
+const path = require("node:path");
+
+const { compile, parseArgs } = require("../wmd-compiler.js");
 
 test("parseArgs supports positional files and serve mode", () => {
   const options = parseArgs(["--serve", "notes.wmd", "notes.html", "--port", "4500"]);
@@ -13,6 +13,17 @@ test("parseArgs supports positional files and serve mode", () => {
   assert.equal(options.inputPath, "notes.wmd");
   assert.equal(options.outputPath, "notes.html");
   assert.equal(options.port, 4500);
+});
+
+test("parseArgs derives the output path from the input file", () => {
+  const options = parseArgs([path.join("docs", "notes.wmd")]);
+
+  assert.equal(options.outputPath, path.join("docs", "notes.html"));
+});
+
+test("parseArgs requires an input file outside help mode", () => {
+  assert.throws(() => parseArgs([]), /Missing input \.wmd file/);
+  assert.equal(parseArgs(["--help"]).help, true);
 });
 
 test("duplicate headings get unique ids and stable link targets", () => {
@@ -33,60 +44,6 @@ Second section
   assert.match(result.html, /id="main-repeat"/);
   assert.match(result.html, /id="main-repeat-2"/);
   assert.match(result.html, /href="#main-repeat">Main#Repeat<\/a>/);
-});
-
-test("incremental compilation renders only the tab containing an ordinary edit", () => {
-  const before = "@tab One\n\nFirst paragraph\n\n@tab Two\n\nSecond paragraph";
-  const after = before.replace("First paragraph", "First updated paragraph");
-  const result = compileIncremental(before, after, operationFromTextDiff(before, after));
-
-  assert.equal(result.mode, "patch");
-  assert.equal(result.tabId, "one");
-  assert.match(result.html, /First updated paragraph/);
-  assert.doesNotMatch(result.html, /Second paragraph/);
-  assert.doesNotMatch(result.html, /<!DOCTYPE html>/);
-});
-
-test("incremental formatting emits a source-mapped patch", () => {
-  const before = "@tab Home\n\nPlain words here.";
-  const after = "@tab Home\n\nPlain *words* here.";
-  const result = compileIncremental(before, after, operationFromTextDiff(before, after));
-
-  assert.equal(result.mode, "patch");
-  assert.match(result.html, /<strong>words<\/strong>/);
-  assert.match(result.html, /<!--wmd-source:/);
-});
-
-test("structural edits conservatively request a full compile", () => {
-  const cases = [
-    ["@tab Home\n\nText", "@tab Renamed\n\nText"],
-    ["@config\nfont: Arial\n@endconfig\n\n@tab Home\nText", "@config\nfont: Georgia\n@endconfig\n\n@tab Home\nText"],
-  ];
-
-  for (const [before, after] of cases) {
-    const result = compileIncremental(before, after, operationFromTextDiff(before, after));
-    assert.equal(result.mode, "full");
-    assert.match(result.html, /<!DOCTYPE html>/);
-  }
-});
-
-test("heading edits remain tab-scoped and update navigation without a full compile", () => {
-  const before = "@tab Home\n\n# Heading\n\nText";
-  const after = "@tab Home\n\n# Changed heading\n\nText";
-  const result = compileIncremental(before, after, operationFromTextDiff(before, after));
-
-  assert.equal(result.mode, "patch");
-  assert.match(result.html, /id="home-changed-heading"/);
-  assert.doesNotMatch(result.html, /<!DOCTYPE html>/);
-});
-
-test("documents with includes use a full compile because one edit can affect multiple tabs", () => {
-  const before = "@tab Source\n\nShared text\n\n@tab Consumer\n\n@include Source";
-  const after = before.replace("Shared text", "Updated shared text");
-  const result = compileIncremental(before, after, operationFromTextDiff(before, after));
-
-  assert.equal(result.mode, "full");
-  assert.match(result.html, /Updated shared text/);
 });
 
 test("fenced code headings are not added to navigation", () => {
@@ -184,18 +141,6 @@ test("WMD tables compile to semantic table markup", () => {
   assert.match(result.html, /<table>/);
   assert.match(result.html, /<th>Name<\/th>/);
   assert.match(result.html, /<td>Ada<\/td>/);
-});
-
-test("web server options support LAN and a public editor URL", () => {
-  const options = parseOptions([
-    "--host", "0.0.0.0",
-    "--port", "4510",
-    "--public-url", "https://docs.example.com/workspace",
-  ]);
-
-  assert.equal(options.host, "0.0.0.0");
-  assert.equal(options.port, 4510);
-  assert.equal(options.publicUrl, "https://docs.example.com");
 });
 
 test("config-defined custom heading markers compile and style headings", () => {

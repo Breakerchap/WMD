@@ -1,20 +1,9 @@
 node_modules/
 
-# Generated previews and compiled output
+# Compiler output and packaged extensions
 *.html
+*.vsix
 
-# The browser editor's source page is not generated output.
-!web/public/index.html
-
-# Local documents created by the web editor
-web/data/
-
-# Local editor/system noise
+# Local/editor noise
 .DS_Store
 Thumbs.db
-
-issues.wmd
-
-TTRPG.wmd
-
-*.mp4

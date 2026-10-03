@@ -1,22 +1,31 @@
 {
-  "name": "semi-md",
+  "name": "wikimd",
   "version": "1.0.0",
+  "private": true,
+  "description": "WikiMD compiler and VS Code extension.",
   "main": "wmd-compiler.js",
+  "bin": {
+    "wmd": "./wmd-compiler.js"
+  },
   "scripts": {
     "build": "node ./wmd-compiler.js",
+    "compile": "node ./wmd-compiler.js",
     "watch": "node ./wmd-compiler.js --watch",
     "serve": "node ./wmd-compiler.js --serve",
-    "dev": "node ./wmd-compiler.js --serve --watch",
-    "web": "node ./web/server.js",
-    "web:dev": "node ./web/server.js",
-    "web:lan": "node ./web/server.js --host 0.0.0.0",
-    "web:share": "ngrok http 4313",
-    "test": "node --test"
+    "test": "node --test",
+    "check": "node --check wmd-compiler.js && node --check vscode-extension/extension.js && node --test"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "markdown",
+    "wiki",
+    "wikimd",
+    "wmd"
+  ],
+  "author": "Remy Ellis",
   "license": "GPL-3.0-or-later",
-  "description": "",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "markdown-it": "^14.3.0"
   }
