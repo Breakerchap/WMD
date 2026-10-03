@@ -1,12 +1,16 @@
+#!/usr/bin/env node
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const MarkdownIt = require("markdown-it");
 
-const DEFAULT_INPUT_PATH = "example.wmd";
-const DEFAULT_OUTPUT_PATH = "output.html";
 const DEFAULT_PORT = 4312;
 const WATCH_DEBOUNCE_MS = 120;
+
+function defaultOutputPath(inputPath) {
+  const parsed = path.parse(inputPath);
+  return path.join(parsed.dir, `${parsed.name}.html`);
+}
 
 function slugify(text) {
   return String(text || "")
@@ -45,27 +49,6 @@ function cleanHeadingText(text) {
 
 function stripBom(text) {
   return String(text || "").replace(/^\uFEFF/, "");
-}
-
-function sourceLineRecords(source) {
-  const original = String(source || "");
-  const bomLength = original.startsWith("\uFEFF") ? 1 : 0;
-  const text = original.slice(bomLength);
-  const records = [];
-  let start = bomLength;
-  for (const match of text.matchAll(/([^\r\n]*)(\r\n|\n|\r|$)/g)) {
-    if (!match[0] && match.index === text.length) break;
-    records.push({
-      text: match[1],
-      start,
-      contentEnd: start + match[1].length,
-      end: start + match[0].length,
-    });
-    start += match[0].length;
-    if (!match[2]) break;
-  }
-  if (!records.length) records.push({ text: "", start: bomLength, contentEnd: bomLength, end: bomLength });
-  return records;
 }
 
 function parseTarget(target) {
@@ -670,7 +653,7 @@ function parseTabLine(line) {
   return { name, hidden };
 }
 
-function createTab(name, hidden, sourceStart = 0, headerRange = null) {
+function createTab(name, hidden) {
   return {
     name,
     title: null,
@@ -680,18 +663,11 @@ function createTab(name, hidden, sourceStart = 0, headerRange = null) {
     headings: [],
     refSlug: "",
     domId: "",
-    sourceStart,
-    sourceEnd: sourceStart,
-    headerRange,
-    titleRange: null,
-    contentRanges: [],
   };
 }
 
 function parseWmd(source) {
-  const sourceText = String(source || "");
-  const records = sourceLineRecords(sourceText);
-  const lines = records.map((record) => record.text);
+  const lines = stripBom(source).split(/\r?\n/);
 
   const config = {
     font: "Arial, sans-serif",
@@ -714,9 +690,7 @@ function parseWmd(source) {
   let currentTab = null;
   let inConfig = false;
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    const range = records[lineIndex];
+  for (const line of lines) {
     if (line.trim() === "@config") {
       inConfig = true;
       continue;
@@ -738,8 +712,7 @@ function parseWmd(source) {
 
     if (line.startsWith("@tab ")) {
       const tabInfo = parseTabLine(line);
-      if (currentTab) currentTab.sourceEnd = range.start;
-      currentTab = createTab(tabInfo.name, tabInfo.hidden, range.start, range);
+      currentTab = createTab(tabInfo.name, tabInfo.hidden);
       tabs.push(currentTab);
       continue;
     }
@@ -747,13 +720,12 @@ function parseWmd(source) {
     if (!currentTab) {
       if (line.trim() === "") continue;
 
-      currentTab = createTab("Main", false, range.start, null);
+      currentTab = createTab("Main", false);
       tabs.push(currentTab);
     }
 
     if (line.startsWith("@title ")) {
       currentTab.title = line.slice("@title ".length).trim();
-      currentTab.titleRange = range;
       continue;
     }
 
@@ -763,10 +735,7 @@ function parseWmd(source) {
     }
 
     currentTab.content.push(line);
-    currentTab.contentRanges.push(range);
   }
-
-  if (currentTab) currentTab.sourceEnd = sourceText.length;
 
   return { config, vars, tabs };
 }
@@ -937,32 +906,6 @@ function applyPresetMarkersToTokens(tokens, markers) {
   }
 }
 
-function applySourceRangesToTokens(tokens, tab) {
-  const lines = tab.content;
-  const ranges = tab.contentRanges;
-  for (const token of tokens) {
-    if (!token.block || !token.tag || !token.map || token.nesting < 0) continue;
-    let startLine = token.map[0];
-    let endLine = token.map[1];
-    if (!ranges[startLine] || !ranges[Math.max(startLine, endLine - 1)]) continue;
-
-    // A rendered block owns its explicit style wrapper as well as its Markdown
-    // lines, so a canvas edit cannot leave an orphaned @style/@end pair behind.
-    let wrapperStart = startLine - 1;
-    while (wrapperStart >= 0 && !String(lines[wrapperStart] || "").trim()) wrapperStart -= 1;
-    if (wrapperStart >= 0 && /^@style\s+/i.test(String(lines[wrapperStart] || "").trim())) startLine = wrapperStart;
-    let wrapperEnd = endLine;
-    while (wrapperEnd < lines.length && !String(lines[wrapperEnd] || "").trim()) wrapperEnd += 1;
-    if (startLine !== token.map[0] && wrapperEnd < lines.length && /^@end(?:style)?\s*$/i.test(String(lines[wrapperEnd] || "").trim())) endLine = wrapperEnd + 1;
-
-    const start = ranges[startLine].start;
-    const end = ranges[endLine - 1].contentEnd;
-    token.attrSet("data-wmd-source-start", String(start));
-    token.attrSet("data-wmd-source-end", String(end));
-    token.attrSet("data-wmd-source-key", `${start}:${end}`);
-  }
-}
-
 function extractHeadingSection(markdown, headingName) {
   const lines = markdown.split(/\r?\n/);
   const md = makeMarkdownIt();
@@ -1100,11 +1043,7 @@ function renderTab(md, tab, env, config) {
   const tokens = md.parse(prepared.markdown, env);
   applyHeadingIdsToTokens(tokens, tab.headings);
   applyPresetMarkersToTokens(tokens, prepared.markers);
-  applySourceRangesToTokens(tokens, tab);
-  return md.renderer.render(tokens, md.options, env).replace(
-    /<([^>]+?)\sdata-wmd-source-start="(\d+)"\sdata-wmd-source-end="(\d+)"\sdata-wmd-source-key="([^"]+)">/g,
-    (_match, tag, start, end, key) => `<!--wmd-source:${start}:${end}:${key}--><${tag}>`,
-  );
+  return md.renderer.render(tokens, md.options, env);
 }
 
 function renderTabSection(md, tab, tabs, warnings, config, active = false) {
@@ -1129,17 +1068,17 @@ function renderTabSection(md, tab, tabs, warnings, config, active = false) {
     stylePresets: config.stylePresets,
   }, config);
   const titleHtml = tab.title
-    ? `<h1 class="tab-title"${tab.titleRange ? ` data-wmd-source-start="${tab.titleRange.start}" data-wmd-source-end="${tab.titleRange.contentEnd}" data-wmd-source-key="${tab.titleRange.start}:${tab.titleRange.contentEnd}"` : ""}>${escapeHtml(tab.title)}</h1>`
+    ? `<h1 class="tab-title">${escapeHtml(tab.title)}</h1>`
     : "";
 
   return `
-<section id="${escapeHtml(tab.domId)}" class="tab-section ${active ? "active" : ""}" data-hidden="${tab.hidden ? "true" : "false"}" data-tab-name="${escapeHtml(tab.name)}" data-tab-hidden="${tab.hidden ? "true" : "false"}" data-wmd-source-start="${tab.sourceStart}" data-wmd-source-end="${tab.sourceEnd}" data-wmd-source-key="tab:${tab.sourceStart}">
+<section id="${escapeHtml(tab.domId)}" class="tab-section ${active ? "active" : ""}" data-hidden="${tab.hidden ? "true" : "false"}" data-tab-name="${escapeHtml(tab.name)}" data-tab-hidden="${tab.hidden ? "true" : "false"}">
 ${titleHtml}
 ${rendered}
 </section>`;
 }
 
-function buildHtml(config, tabs, warnings, sourceLength = 0) {
+function buildHtml(config, tabs, warnings) {
   const presetCss = stylePresetCss(config.stylePresets);
   const allHeadings = tabs.flatMap((tab) => tab.headings);
   const visibleTabs = tabs.filter((tab) => !tab.hidden);
@@ -1671,7 +1610,7 @@ ${finalWarnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("\n")}
     ${warningHtml}
   </aside>
 
-  <main data-wmd-source-start="0" data-wmd-source-end="${sourceLength}">
+  <main>
     ${tabSections}
   </main>
 </div>
@@ -1903,120 +1842,27 @@ ${finalWarnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("\n")}
   return { html, warnings: finalWarnings };
 }
 
-function prepareStructure(source) {
-  const sourceText = String(source || "");
-  const { config, vars, tabs } = parseWmd(sourceText);
+function prepareDocument(source) {
+  const { config, vars, tabs } = parseWmd(source);
   const warnings = [];
   const tabsBySlug = finalizeTabs(tabs, warnings);
-  return { source: sourceText, config, vars, tabs, tabsBySlug, warnings };
-}
-
-function prepareDocument(source) {
-  const prepared = prepareStructure(source);
   const md = makeMarkdownIt();
 
-  for (const tab of prepared.tabs) {
-    const withIncludes = resolveIncludes(tab.content.join("\n"), prepared.tabsBySlug, prepared.warnings, tab.name);
-    tab.resolvedContent = applyVars(withIncludes, prepared.vars, prepared.warnings, tab.name);
+  for (const tab of tabs) {
+    const withIncludes = resolveIncludes(tab.content.join("\n"), tabsBySlug, warnings, tab.name);
+    tab.resolvedContent = applyVars(withIncludes, vars, warnings, tab.name);
   }
 
-  for (const tab of prepared.tabs) {
-    tab.headings = collectHeadings(md, tab, prepared.config);
+  for (const tab of tabs) {
+    tab.headings = collectHeadings(md, tab, config);
   }
 
-  return { ...prepared, md };
+  return { config, tabs, warnings };
 }
 
 function compile(source) {
-  const prepared = prepareDocument(source);
-  return buildHtml(prepared.config, prepared.tabs, prepared.warnings, prepared.source.length);
-}
-
-function operationBounds(operation) {
-  if (!operation || !Array.isArray(operation.ops)) return null;
-  let oldPosition = 0;
-  let newPosition = 0;
-  const bounds = { oldStart: Infinity, oldEnd: -Infinity, newStart: Infinity, newEnd: -Infinity };
-  for (const part of operation.ops) {
-    if (typeof part === "string") {
-      bounds.oldStart = Math.min(bounds.oldStart, oldPosition);
-      bounds.oldEnd = Math.max(bounds.oldEnd, oldPosition);
-      bounds.newStart = Math.min(bounds.newStart, newPosition);
-      newPosition += part.length;
-      bounds.newEnd = Math.max(bounds.newEnd, newPosition);
-    } else if (Number.isSafeInteger(part) && part > 0) {
-      oldPosition += part;
-      newPosition += part;
-    } else if (Number.isSafeInteger(part) && part < 0) {
-      bounds.oldStart = Math.min(bounds.oldStart, oldPosition);
-      bounds.oldEnd = Math.max(bounds.oldEnd, oldPosition - part);
-      bounds.newStart = Math.min(bounds.newStart, newPosition);
-      bounds.newEnd = Math.max(bounds.newEnd, newPosition);
-      oldPosition -= part;
-    } else {
-      return null;
-    }
-  }
-  if (!Number.isFinite(bounds.oldStart)) return null;
-  return { ...bounds, oldLength: oldPosition, newLength: newPosition };
-}
-
-function tabIndexAtOffset(tabs, offset) {
-  const position = Math.max(0, Number(offset) || 0);
-  let match = -1;
-  tabs.forEach((tab, index) => {
-    if (tab.sourceStart <= position && position <= tab.sourceEnd) match = index;
-  });
-  return match;
-}
-
-function changedLineText(source, start, end) {
-  const low = Math.max(0, Number(start) || 0);
-  const high = Math.max(low, Number(end) || low);
-  return sourceLineRecords(source)
-    .filter((record) => record.start <= high && record.end >= low)
-    .map((record) => record.text)
-    .join("\n");
-}
-
-function requiresFullCompile(previous, next, bounds) {
-  if (bounds.oldLength !== previous.source.length || bounds.newLength !== next.source.length) return true;
-  if (previous.tabs.length !== next.tabs.length) return true;
-  if (/@(?:include|embed)\s+/im.test(previous.source) || /@(?:include|embed)\s+/im.test(next.source)) return true;
-  if (previous.tabs.some((tab, index) => {
-    const candidate = next.tabs[index];
-    return !candidate || tab.domId !== candidate.domId || tab.name !== candidate.name || tab.hidden !== candidate.hidden;
-  })) return true;
-
-  const oldTabIndex = tabIndexAtOffset(previous.tabs, bounds.oldStart);
-  const newTabIndex = tabIndexAtOffset(next.tabs, bounds.newStart);
-  if (oldTabIndex < 0 || newTabIndex < 0 || oldTabIndex !== newTabIndex) return true;
-  if (bounds.oldEnd > previous.tabs[oldTabIndex].sourceEnd || bounds.newEnd > next.tabs[newTabIndex].sourceEnd) return true;
-
-  const structuralLine = /^\s*@(config|endconfig|var|tab|hidden|include|embed)\b/im;
-  if (structuralLine.test(changedLineText(previous.source, bounds.oldStart, bounds.oldEnd))) return true;
-  if (structuralLine.test(changedLineText(next.source, bounds.newStart, bounds.newEnd))) return true;
-  return false;
-}
-
-function compileIncremental(previousSource, source, operation) {
-  const previous = prepareStructure(previousSource);
-  const next = prepareDocument(source);
-  const bounds = operationBounds(operation);
-  if (!bounds || requiresFullCompile(previous, next, bounds)) {
-    return { mode: "full", ...buildHtml(next.config, next.tabs, next.warnings, next.source.length) };
-  }
-
-  const tabIndex = tabIndexAtOffset(next.tabs, bounds.newStart);
-  const tab = next.tabs[tabIndex];
-  const html = renderTabSection(next.md, tab, next.tabs, next.warnings, next.config, false);
-  return {
-    mode: "patch",
-    html,
-    tabId: tab.domId,
-    sourceLength: next.source.length,
-    warnings: uniqueWarnings(next.warnings),
-  };
+  const prepared = prepareDocument(String(source || ""));
+  return buildHtml(prepared.config, prepared.tabs, prepared.warnings);
 }
 
 function ensureParentDirectory(filePath) {
@@ -2251,32 +2097,38 @@ function reportCompile(result, inputPath, outputPath) {
   }
 }
 
-function reportCompileError(error, inputPath) {
+function reportCompileError(error, inputPath = "") {
   const message = error && error.message ? error.message : String(error);
-  console.error(`error ${formatPathForLog(inputPath)}: ${message}`);
+  const prefix = inputPath ? `error ${formatPathForLog(inputPath)}:` : "error:";
+  console.error(`${prefix} ${message}`);
 }
 
 function printHelp() {
-  console.log(`WMD compiler
+  console.log(`WikiMD compiler
 
 Usage:
-  node wmd-compiler.js [input] [output]
-  node wmd-compiler.js --watch [input] [output]
-  node wmd-compiler.js --serve [input] [output] [--port 4312]
+  node wmd-compiler.js <input.wmd> [output.html]
+  node wmd-compiler.js --watch <input.wmd> [output.html]
+  node wmd-compiler.js --serve <input.wmd> [output.html] [--port 4312]
 
 Options:
-  --input, -i   Input .wmd file (default: ${DEFAULT_INPUT_PATH})
-  --output, -o  Output HTML file (default: ${DEFAULT_OUTPUT_PATH})
+  --input, -i   Input .wmd file
+  --output, -o  Output HTML file (default: input file with .html extension)
   --watch, -w   Recompile when the input file changes
   --serve, -s   Start a local preview server with live reload
   --port, -p    Preview server port (default: ${DEFAULT_PORT})
-  --help, -h    Show this help text`);
+  --help, -h    Show this help text
+
+Examples:
+  node wmd-compiler.js notes.wmd
+  node wmd-compiler.js notes.wmd notes.html
+  node wmd-compiler.js --serve notes.wmd --port 4400`);
 }
 
 function parseArgs(argv) {
   const options = {
-    inputPath: DEFAULT_INPUT_PATH,
-    outputPath: DEFAULT_OUTPUT_PATH,
+    inputPath: "",
+    outputPath: "",
     watch: false,
     serve: false,
     port: DEFAULT_PORT,
@@ -2307,6 +2159,7 @@ function parseArgs(argv) {
     if (arg === "--input" || arg === "-i") {
       i += 1;
       if (i >= argv.length) throw new Error("Missing value for --input.");
+      if (options.inputPath) throw new Error("Input specified more than once.");
       options.inputPath = argv[i];
       continue;
     }
@@ -2314,6 +2167,7 @@ function parseArgs(argv) {
     if (arg === "--output" || arg === "-o") {
       i += 1;
       if (i >= argv.length) throw new Error("Missing value for --output.");
+      if (options.outputPath) throw new Error("Output specified more than once.");
       options.outputPath = argv[i];
       continue;
     }
@@ -2323,7 +2177,7 @@ function parseArgs(argv) {
       if (i >= argv.length) throw new Error("Missing value for --port.");
 
       const port = Number(argv[i]);
-      if (!Number.isInteger(port) || port <= 0) {
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
         throw new Error(`Invalid port: ${argv[i]}`);
       }
 
@@ -2338,17 +2192,23 @@ function parseArgs(argv) {
     positional.push(arg);
   }
 
+  if (positional.length > 2) {
+    throw new Error("Too many positional arguments.");
+  }
+
   if (positional[0]) {
+    if (options.inputPath) throw new Error("Input specified more than once.");
     options.inputPath = positional[0];
   }
 
   if (positional[1]) {
+    if (options.outputPath) throw new Error("Output specified more than once.");
     options.outputPath = positional[1];
   }
 
-  if (positional.length > 2) {
-    throw new Error("Too many positional arguments.");
-  }
+  if (options.help) return options;
+  if (!options.inputPath) throw new Error("Missing input .wmd file.");
+  if (!options.outputPath) options.outputPath = defaultOutputPath(options.inputPath);
 
   return options;
 }
@@ -2359,7 +2219,7 @@ function runCli(argv = process.argv.slice(2)) {
   try {
     options = parseArgs(argv);
   } catch (error) {
-    reportCompileError(error, DEFAULT_INPUT_PATH);
+    reportCompileError(error);
     process.exitCode = 1;
     return;
   }
@@ -2409,11 +2269,8 @@ function runCli(argv = process.argv.slice(2)) {
 }
 
 module.exports = {
-  DEFAULT_INPUT_PATH,
-  DEFAULT_OUTPUT_PATH,
   DEFAULT_PORT,
   compile,
-  compileIncremental,
   compileFile,
   parseArgs,
   startPreviewServer,
