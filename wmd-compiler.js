@@ -666,10 +666,8 @@ function createTab(name, hidden) {
   };
 }
 
-function parseWmd(source) {
-  const lines = stripBom(source).split(/\r?\n/);
-
-  const config = {
+function defaultConfig() {
+  return {
     font: "Arial, sans-serif",
     monoFont: "Consolas, monospace",
     baseSize: "16px",
@@ -684,6 +682,11 @@ function parseWmd(source) {
     contentWidth: "900px",
     stylePresets: {},
   };
+}
+
+function parseWmd(source) {
+  const lines = stripBom(source).split(/\r?\n/);
+  const config = defaultConfig();
 
   const vars = {};
   const tabs = [];
@@ -1015,9 +1018,9 @@ function uniqueWarnings(warnings) {
   return [...new Set(warnings)];
 }
 
-function makeMarkdownIt() {
+function makeMarkdownIt(options = {}) {
   const md = new MarkdownIt({
-    html: false,
+    html: options.html === true,
     breaks: true,
     linkify: true,
     typographer: true,
@@ -1025,7 +1028,7 @@ function makeMarkdownIt() {
 
   md.disable("emphasis");
   md.enable("strikethrough");
-  md.use(wikiLinkPlugin);
+  if (options.tabs !== false) md.use(wikiLinkPlugin);
   md.use(taskCheckboxPlugin);
   md.use(customBoldPlugin);
   md.use(customItalicPlugin);
@@ -1036,6 +1039,1142 @@ function makeMarkdownIt() {
   md.use(tocPlugin);
 
   return md;
+}
+
+function protectMathDelimiters(markdown) {
+  const values = [];
+  const placeholder = (value) => {
+    const index = values.push(value) - 1;
+    return `WMDMATHPLACEHOLDER${index}TOKEN`;
+  };
+
+  let protectedMarkdown = String(markdown || "");
+
+  const patterns = [
+    /\$\$[\s\S]+?\$\$/g,
+    /\\\[[\s\S]+?\\\]/g,
+    /\\\([\s\S]+?\\\)/g,
+    /(^|[^\\$])\$(?!\$)([^\n$]+?)(?<!\\)\$/gm,
+  ];
+
+  protectedMarkdown = protectedMarkdown.replace(patterns[0], (match) => placeholder(match));
+  protectedMarkdown = protectedMarkdown.replace(patterns[1], (match) => placeholder(match));
+  protectedMarkdown = protectedMarkdown.replace(patterns[2], (match) => placeholder(match));
+  protectedMarkdown = protectedMarkdown.replace(patterns[3], (match, prefix, content) => {
+    return `${prefix}${placeholder(`${content}#!/usr/bin/env node
+const fs = require("fs");
+const http = require("http");
+const path = require("path");
+const MarkdownIt = require("markdown-it");
+
+const DEFAULT_PORT = 4312;
+const WATCH_DEBOUNCE_MS = 120;
+
+function defaultOutputPath(inputPath) {
+  const parsed = path.parse(inputPath);
+  return path.join(parsed.dir, `${parsed.name}.html`);
+}
+
+function slugify(text) {
+  return String(text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function niceLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function cleanHeadingText(text) {
+  return String(text || "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, "$2")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`#=]/g, "")
+    .trim();
+}
+
+function stripBom(text) {
+  return String(text || "").replace(/^\uFEFF/, "");
+}
+
+function parseTarget(target) {
+  const raw = String(target || "").trim();
+  const hashIndex = raw.indexOf("#");
+
+  if (hashIndex === -1) {
+    return {
+      raw,
+      tabName: raw,
+      headingName: "",
+      tabSlug: slugify(raw),
+      headingSlug: "",
+    };
+  }
+
+  const tabName = raw.slice(0, hashIndex).trim();
+  const headingName = raw.slice(hashIndex + 1).trim();
+
+  return {
+    raw,
+    tabName,
+    headingName,
+    tabSlug: slugify(tabName),
+    headingSlug: slugify(headingName),
+  };
+}
+
+function wikiLinkPlugin(md) {
+  md.inline.ruler.before("link", "wiki_link", (state, silent) => {
+    const start = state.pos;
+
+    if (state.src.slice(start, start + 2) !== "[[") return false;
+
+    const end = state.src.indexOf("]]", start + 2);
+    if (end === -1) return false;
+
+    const raw = state.src.slice(start + 2, end);
+    const [targetRaw, labelRaw] = raw.split("|");
+    const target = parseTarget(targetRaw);
+
+    if (!target.tabSlug) return false;
+
+    const tabId = state.env.tabAnchors && state.env.tabAnchors.get(target.tabSlug);
+    const headingKey = `${target.tabSlug}-${target.headingSlug}`;
+    const headingId = target.headingSlug && state.env.headingAnchors
+      ? state.env.headingAnchors.get(headingKey)
+      : "";
+    const href = target.headingSlug
+      ? `#${headingId || headingKey}`
+      : `#${tabId || target.tabSlug}`;
+
+    const label = labelRaw || targetRaw;
+    const tabExists = Boolean(tabId);
+    const headingExists = !target.headingSlug || Boolean(headingId);
+    const isBroken = !tabExists || !headingExists;
+
+    if (isBroken && state.env.warnings) {
+      if (!tabExists) {
+        state.env.warnings.push(`Broken link in ${state.env.currentTabName}: tab does not exist: [[${target.raw}]]`);
+      } else {
+        state.env.warnings.push(`Broken link in ${state.env.currentTabName}: heading does not exist: [[${target.raw}]]`);
+      }
+    }
+
+    if (!silent) {
+      const open = state.push("link_open", "a", 1);
+      open.attrs = isBroken
+        ? [["href", href], ["class", "broken-link"], ["title", "Broken WMD link"]]
+        : [["href", href]];
+
+      const text = state.push("text", "", 0);
+      text.content = label;
+
+      state.push("link_close", "a", -1);
+    }
+
+    state.pos = end + 2;
+    return true;
+  });
+}
+
+function customBoldPlugin(md) {
+  md.inline.ruler.before("link", "custom_bold", (state, silent) => {
+    const start = state.pos;
+
+    if (state.src[start] !== "*") return false;
+    if (state.src[start + 1] === "*") return false;
+
+    let end = start + 1;
+
+    while (end < state.src.length) {
+      if (state.src[end] === "\\" && end + 1 < state.src.length) {
+        end += 2;
+        continue;
+      }
+
+      if (state.src[end] === "*" && state.src[end + 1] !== "*") break;
+
+      end++;
+    }
+
+    if (end >= state.src.length) return false;
+    if (end === start + 1) return false;
+
+    if (!silent) {
+      const token = state.push("strong_open", "strong", 1);
+      token.markup = "*";
+
+      const content = state.src.slice(start + 1, end);
+      state.md.inline.parse(content, state.md, state.env, state.tokens);
+
+      const close = state.push("strong_close", "strong", -1);
+      close.markup = "*";
+    }
+
+    state.pos = end + 1;
+    return true;
+  });
+}
+
+function taskCheckboxPlugin(md) {
+  md.inline.ruler.before("link", "wmd_task_checkbox", (state, silent) => {
+    const match = state.src.slice(state.pos).match(/^\[([ xX])\]\s+/);
+    if (!match) return false;
+
+    if (!silent) {
+      const token = state.push("wmd_task_checkbox", "input", 0);
+      token.meta = { checked: match[1].toLowerCase() === "x" };
+    }
+
+    state.pos += match[0].length;
+    return true;
+  });
+
+  md.renderer.rules.wmd_task_checkbox = (tokens, idx) => {
+    return `<input class="task-checkbox" type="checkbox"${tokens[idx].meta.checked ? " checked" : ""} disabled>`;
+  };
+}
+
+function customItalicPlugin(md) {
+  md.inline.ruler.before("link", "custom_italic", (state, silent) => {
+    const start = state.pos;
+
+    if (state.src[start] !== "_") return false;
+    if (state.src[start + 1] === "_") return false;
+
+    let end = start + 1;
+
+    while (end < state.src.length) {
+      if (state.src[end] === "\\" && end + 1 < state.src.length) {
+        end += 2;
+        continue;
+      }
+
+      if (state.src[end] === "_" && state.src[end + 1] !== "_") break;
+
+      end++;
+    }
+
+    if (end >= state.src.length) return false;
+    if (end === start + 1) return false;
+
+    if (!silent) {
+      const token = state.push("em_open", "em", 1);
+      token.markup = "_";
+
+      const content = state.src.slice(start + 1, end);
+      state.md.inline.parse(content, state.md, state.env, state.tokens);
+
+      const close = state.push("em_close", "em", -1);
+      close.markup = "_";
+    }
+
+    state.pos = end + 1;
+    return true;
+  });
+}
+
+function underlinePlugin(md) {
+  md.inline.ruler.before("link", "underline", (state, silent) => {
+    const start = state.pos;
+    if (state.src.slice(start, start + 2) !== "++") return false;
+
+    const end = state.src.indexOf("++", start + 2);
+    if (end === -1 || end === start + 2) return false;
+
+    if (!silent) {
+      state.push("u_open", "u", 1);
+      state.md.inline.parse(state.src.slice(start + 2, end), state.md, state.env, state.tokens);
+      state.push("u_close", "u", -1);
+    }
+
+    state.pos = end + 2;
+    return true;
+  });
+}
+
+function highlightPlugin(md) {
+  md.inline.ruler.before("link", "highlight", (state, silent) => {
+    const start = state.pos;
+
+    let level = 0;
+    let marker = "";
+
+    if (state.src.slice(start, start + 3) === "===") {
+      level = 3;
+      marker = "===";
+    } else if (state.src.slice(start, start + 2) === "==") {
+      level = 2;
+      marker = "==";
+    } else if (state.src[start] === "=") {
+      level = 1;
+      marker = "=";
+    } else {
+      return false;
+    }
+
+    const end = state.src.indexOf(marker, start + marker.length);
+    if (end === -1) return false;
+    if (end === start + marker.length) return false;
+
+    if (!silent) {
+      const open = state.push("span_open", "span", 1);
+      open.attrs = [["class", `highlight highlight-${level}`]];
+
+      const content = state.src.slice(start + marker.length, end);
+      state.md.inline.parse(content, state.md, state.env, state.tokens);
+
+      state.push("span_close", "span", -1);
+    }
+
+    state.pos = end + marker.length;
+    return true;
+  });
+}
+
+function calloutPlugin(md) {
+  md.block.ruler.before("paragraph", "wmd_callout", (state, startLine, endLine, silent) => {
+    const start = state.bMarks[startLine] + state.tShift[startLine];
+    const max = state.eMarks[startLine];
+    const line = state.src.slice(start, max).trim();
+    const match = line.match(/^!([A-Za-z][\w-]*)(?:\s+(.*))?$/);
+
+    if (!match) return false;
+
+    const type = match[1].toLowerCase();
+    if (type === "end") return false;
+
+    let nextLine = startLine + 1;
+    const contentLines = [];
+
+    while (nextLine < endLine) {
+      const pos = state.bMarks[nextLine] + state.tShift[nextLine];
+      const lineMax = state.eMarks[nextLine];
+      const text = state.src.slice(pos, lineMax);
+
+      if (text.trim() === "!end") break;
+
+      contentLines.push(text);
+      nextLine++;
+    }
+
+    if (nextLine >= endLine) return false;
+    if (silent) return true;
+
+    const open = state.push("wmd_callout_open", "div", 1);
+    open.block = true;
+    open.map = [startLine, nextLine + 1];
+    const calloutPreset = Object.values(state.env && state.env.stylePresets || {})
+      .find((preset) => preset && preset.block === "callout" && preset.calloutType === type);
+
+    open.meta = {
+      type,
+      title: (match[2] || calloutPreset && (calloutPreset.calloutTitle || calloutPreset.name) || niceLabel(type)).trim(),
+    };
+
+    const nestedStart = state.tokens.length;
+    state.md.block.parse(contentLines.join("\n"), state.md, state.env, state.tokens);
+    for (const token of state.tokens.slice(nestedStart)) {
+      if (token.map) token.map = [token.map[0] + startLine + 1, token.map[1] + startLine + 1];
+    }
+
+    state.push("wmd_callout_close", "div", -1);
+    state.line = nextLine + 1;
+    return true;
+  });
+
+  md.renderer.rules.wmd_callout_open = (tokens, idx) => {
+    const token = tokens[idx];
+    const meta = token.meta || {};
+    const type = meta.type || "note";
+    const title = meta.title || niceLabel(type);
+    const attrs = new Map(token.attrs || []);
+    const extraClass = attrs.get("class") || "";
+    attrs.delete("class");
+    const extraAttrs = [...attrs.entries()].map(([name, value]) => ` ${escapeHtml(name)}="${escapeHtml(value)}"`).join("");
+
+    return `<div class="callout callout-${escapeHtml(type)}${extraClass ? ` ${escapeHtml(extraClass)}` : ""}"${extraAttrs}>\n<div class="callout-title">${escapeHtml(title)}</div>\n<div class="callout-body">\n`;
+  };
+
+  md.renderer.rules.wmd_callout_close = () => {
+    return "</div>\n</div>\n";
+  };
+}
+
+function collapsePlugin(md) {
+  md.block.ruler.before("paragraph", "wmd_collapse", (state, startLine, endLine, silent) => {
+    const start = state.bMarks[startLine] + state.tShift[startLine];
+    const max = state.eMarks[startLine];
+    const line = state.src.slice(start, max).trim();
+    const match = line.match(/^@collapse(?:\s+(.+))?$/);
+
+    if (!match) return false;
+
+    let nextLine = startLine + 1;
+    const contentLines = [];
+
+    while (nextLine < endLine) {
+      const pos = state.bMarks[nextLine] + state.tShift[nextLine];
+      const lineMax = state.eMarks[nextLine];
+      const text = state.src.slice(pos, lineMax);
+
+      if (text.trim() === "@endcollapse") break;
+
+      contentLines.push(text);
+      nextLine++;
+    }
+
+    if (nextLine >= endLine) return false;
+    if (silent) return true;
+
+    const open = state.push("wmd_collapse_open", "details", 1);
+    open.block = true;
+    open.map = [startLine, nextLine + 1];
+    open.meta = {
+      title: (match[1] || "Details").trim(),
+    };
+
+    state.md.block.parse(contentLines.join("\n"), state.md, state.env, state.tokens);
+
+    state.push("wmd_collapse_close", "details", -1);
+    state.line = nextLine + 1;
+    return true;
+  });
+
+  md.renderer.rules.wmd_collapse_open = (tokens, idx) => {
+    const title = tokens[idx].meta && tokens[idx].meta.title
+      ? tokens[idx].meta.title
+      : "Details";
+
+    return `<details class="collapse">\n<summary>${escapeHtml(title)}</summary>\n<div class="collapse-body">\n`;
+  };
+
+  md.renderer.rules.wmd_collapse_close = () => {
+    return "</div>\n</details>\n";
+  };
+}
+
+function tocPlugin(md) {
+  md.block.ruler.before("paragraph", "wmd_toc", (state, startLine, endLine, silent) => {
+    const start = state.bMarks[startLine] + state.tShift[startLine];
+    const max = state.eMarks[startLine];
+    const line = state.src.slice(start, max).trim();
+    const match = line.match(/^@toc(?:\s+depth\s*:\s*([1-6]))?\s*$/);
+
+    if (!match) return false;
+    if (silent) return true;
+
+    const token = state.push("wmd_toc", "nav", 0);
+    token.block = true;
+    token.map = [startLine, startLine + 1];
+    token.meta = {
+      depth: match[1] ? Number(match[1]) : 6,
+    };
+
+    state.line = startLine + 1;
+    return true;
+  });
+
+  md.renderer.rules.wmd_toc = (tokens, idx, options, env) => {
+    const depth = tokens[idx].meta.depth;
+    const headings = (env.currentTabHeadings || []).filter((heading) => heading.level <= depth);
+
+    if (!headings.length) {
+      return '<nav class="toc"><div class="toc-title">Contents</div><p class="toc-empty">No headings in this tab.</p></nav>\n';
+    }
+
+    const items = headings
+      .map((heading) => {
+        return `<a class="toc-link toc-level-${heading.level}" href="#${escapeHtml(heading.id)}">${escapeHtml(heading.text)}</a>`;
+      })
+      .join("\n");
+
+    return `<nav class="toc">\n<div class="toc-title">Contents</div>\n${items}\n</nav>\n`;
+  };
+}
+
+function normalizeStyleName(value) {
+  const text = String(value || "").trim();
+  const lower = text.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (lower === "title") return "title";
+  if (lower === "normal" || lower === "normal text" || lower === "paragraph") return "normal-text";
+  const heading = lower.match(/^heading\s*([1-6])$/);
+  if (heading) return `heading-${heading[1]}`;
+  return lower.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+}
+
+function normalizeConfigPropertyName(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
+
+function parseConfigValue(value) {
+  const text = String(value || "").trim();
+  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+    return text.slice(1, -1);
+  }
+  return text;
+}
+
+function parseStyleBoolean(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (["true", "yes", "on", "1"].includes(text)) return true;
+  if (["false", "no", "off", "0"].includes(text)) return false;
+  return Boolean(text);
+}
+
+function parseStylePropertyBlock(rawValue) {
+  let body = String(rawValue || "").trim().replace(/;\s*$/, "").trim();
+  if (!body.startsWith("{") || !body.endsWith("}")) return null;
+  body = body.slice(1, -1).trim();
+  const props = {};
+  for (const part of body.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/^([A-Za-z][\w-]*)\s*:\s*([\s\S]*)$/);
+    if (!match) continue;
+    props[normalizeConfigPropertyName(match[1])] = parseConfigValue(match[2]);
+  }
+  return props;
+}
+
+function parseConfigLine(line, config) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || trimmed.startsWith("//")) return;
+
+  const match = trimmed.match(/^([^:]+?)\s*:\s*([\s\S]+?)\s*;?\s*$/);
+  if (!match) return;
+
+  const cleanKey = match[1].trim();
+  const rawValue = match[2].trim();
+  const styleProps = parseStylePropertyBlock(rawValue);
+
+  if (styleProps) {
+    const preset = normalizeStylePreset({ name: cleanKey, id: normalizeStyleName(cleanKey), ...styleProps });
+    if (preset) config.stylePresets[preset.id] = preset;
+    return;
+  }
+
+  if (cleanKey in config) {
+    config[cleanKey] = parseConfigValue(rawValue.replace(/;\s*$/, ""));
+  }
+}
+
+function normalizeWmdFormatting(value) {
+  return String(value ?? "").trim();
+}
+
+function wmdFormattingInfo(value, name = "") {
+  const formatting = normalizeWmdFormatting(value);
+  const lower = formatting.toLowerCase();
+  const heading = formatting.match(/^(#{1,6})$/);
+  const base = { formatting, block: "paragraph", level: "", calloutType: "note", wrapsStyle: false, customMarker: false };
+  if (!formatting) return base;
+  if (lower === "@title") return { ...base, block: "title", level: 1 };
+  if (lower === "@style") return { ...base, wrapsStyle: true };
+  if (heading) return { ...base, block: "heading", level: heading[1].length };
+  if (/^(?:-|\*|\+)\s*\[\s?\]$/.test(lower) || /^(?:-|\*|\+)\s*\[[x ]\]$/.test(lower) || lower === "checklist") return { ...base, block: "checklist" };
+  if (["-", "*", "+", "unordered-list", "bullet-list"].includes(lower)) return { ...base, block: "bullet-list" };
+  if (["1.", "1", "ordered-list", "numbered-list"].includes(lower)) return { ...base, block: "numbered-list" };
+  const callout = lower.match(/^!([a-z][\w-]*)$/);
+  if (callout && callout[1] !== "end") return { ...base, block: "callout", calloutType: callout[1] };
+  const headingLike = /^heading\b/i.test(String(name || ""));
+  return { ...base, block: headingLike ? "heading" : "paragraph", level: headingLike ? 2 : "", customMarker: true };
+}
+
+function normalizeStylePreset(value) {
+  const preset = value && typeof value === "object" ? value : {};
+  const id = normalizeStyleName(preset.id || preset.name);
+  if (!id) return null;
+
+  const prop = (name) => preset[name] ?? preset[normalizeConfigPropertyName(name)];
+  const wmdFormatting = normalizeWmdFormatting(prop("wmd-formatting") ?? prop("wmdFormatting") ?? "@style");
+  const info = wmdFormattingInfo(wmdFormatting, preset.name || preset.id);
+
+  return {
+    id,
+    name: String(preset.name || id).trim().slice(0, 48) || id,
+    wmdFormatting,
+    font: sanitizeCssValue(prop("font")),
+    size: sanitizeCssValue(prop("size")),
+    bold: parseStyleBoolean(prop("bold")),
+    italic: parseStyleBoolean(prop("italic")),
+    underline: parseStyleBoolean(prop("underline")),
+    strike: parseStyleBoolean(prop("strike") ?? prop("strikethrough")),
+    highlight: parseStyleBoolean(prop("highlight")),
+    block: info.block,
+    heading: info.block === "heading" || info.block === "title",
+    level: info.level,
+    shortcut: String(prop("keybind") ?? prop("shortcut") ?? "").trim().slice(0, 40),
+    calloutType: sanitizeIdentifier(prop("callout-type") ?? prop("calloutType") ?? info.calloutType, info.calloutType),
+    calloutTitle: sanitizeTextValue(prop("callout-title") ?? prop("calloutTitle")),
+    calloutIcon: sanitizeTextValue(prop("callout-icon") ?? prop("icon")),
+    calloutBackground: sanitizeCssValue(prop("callout-bg") ?? prop("callout-background") ?? prop("background") ?? prop("background-color") ?? prop("background-colour")),
+    calloutBorder: sanitizeCssValue(prop("callout-border") ?? prop("border") ?? prop("border-color") ?? prop("border-colour") ?? prop("accent") ?? prop("accent-color") ?? prop("accent-colour")),
+    calloutText: sanitizeCssValue(prop("callout-text") ?? prop("text") ?? prop("text-color") ?? prop("text-colour")),
+    calloutTitleColor: sanitizeCssValue(prop("callout-title-color") ?? prop("callout-title-colour") ?? prop("title-color") ?? prop("title-colour")),
+    calloutRadius: sanitizeCssValue(prop("callout-radius") ?? prop("radius") ?? prop("border-radius")),
+  };
+}
+
+function sanitizeCssValue(value) {
+  return String(value || "").replace(/[;{}<>]/g, "").trim().slice(0, 160);
+}
+
+function sanitizeTextValue(value) {
+  return String(value || "").replace(/[<>]/g, "").trim().slice(0, 120);
+}
+
+function sanitizeIdentifier(value, fallback = "note") {
+  const text = String(value || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return text && text !== "end" ? text.slice(0, 48) : fallback;
+}
+
+function nativeStyleSelectors(preset) {
+  const info = wmdFormattingInfo(preset && preset.wmdFormatting || "", preset && preset.name || "");
+  const idSelector = `[data-wmd-preset="${escapeHtml(preset.id)}"]`;
+  if (info.wrapsStyle || info.customMarker) return [idSelector];
+  if (info.block === "title") return [".tab-title", idSelector];
+  if (info.block === "heading" && info.level) return [`.tab-section h${info.level}:not(.tab-title):not([data-wmd-preset])`, idSelector];
+  if (info.block === "paragraph") return [".tab-section p:not([data-wmd-preset])", idSelector];
+  if (info.block === "bullet-list" || info.block === "checklist") return [".tab-section ul:not([data-wmd-preset])", idSelector];
+  if (info.block === "numbered-list") return [".tab-section ol:not([data-wmd-preset])", idSelector];
+  if (info.block === "callout") return [`.tab-section .callout-${info.calloutType}:not([data-wmd-preset])`, idSelector];
+  return [idSelector];
+}
+
+function stylePresetCss(stylePresets) {
+  return Object.values(stylePresets || {}).map((preset) => {
+    const declarations = [
+      `font-weight:${preset.bold ? "700" : "400"}`,
+      `font-style:${preset.italic ? "italic" : "normal"}`,
+      `text-decoration-line:${[preset.underline ? "underline" : "", preset.strike ? "line-through" : ""].filter(Boolean).join(" ") || "none"}`,
+    ];
+    if (preset.highlight) declarations.push("background:rgba(255,220,120,.32)");
+    if (preset.font) declarations.push(`font-family:${preset.font}`);
+    if (preset.size) declarations.push(`font-size:${preset.size}`);
+    if (preset.calloutText) declarations.push(`color:${preset.calloutText}`);
+
+    const blocks = [`${nativeStyleSelectors(preset).join(",")}{${declarations.join(";")}}`];
+    if (preset.block === "callout") {
+      const callout = [];
+      if (preset.calloutBackground) callout.push(`background:${preset.calloutBackground}`);
+      if (preset.calloutBorder) callout.push(`border-left-color:${preset.calloutBorder}`);
+      if (preset.calloutText) callout.push(`color:${preset.calloutText}`);
+      if (preset.calloutRadius) callout.push(`border-radius:${preset.calloutRadius}`);
+      if (callout.length) blocks.push(`${nativeStyleSelectors(preset).join(",")}{${callout.join(";")}}`);
+      if (preset.calloutTitleColor) blocks.push(`${nativeStyleSelectors(preset).map((selector) => `${selector} .callout-title`).join(",")}{color:${preset.calloutTitleColor}}`);
+      if (preset.calloutIcon) blocks.push(`${nativeStyleSelectors(preset).map((selector) => `${selector} .callout-title::before`).join(",")}{content:"${cssString(preset.calloutIcon)}";margin-right:.45em}`);
+    }
+    return blocks.join("\n  ");
+  }).join("\n  ");
+}
+
+function cssString(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+
+function parseVarLine(line, vars) {
+  const match = line.trim().match(/^@var\s+([A-Za-z][\w-]*)\s*(?:=|:)\s*(.+)$/);
+  if (!match) return false;
+
+  vars[match[1]] = match[2].trim();
+  return true;
+}
+
+function parseTabLine(line) {
+  let name = line.slice("@tab ".length).trim();
+  let hidden = false;
+
+  if (/\s+\{hidden\}\s*$/i.test(name)) {
+    hidden = true;
+    name = name.replace(/\s+\{hidden\}\s*$/i, "").trim();
+  }
+
+  if (/\s+\[hidden\]\s*$/i.test(name)) {
+    hidden = true;
+    name = name.replace(/\s+\[hidden\]\s*$/i, "").trim();
+  }
+
+  return { name, hidden };
+}
+
+function createTab(name, hidden) {
+  return {
+    name,
+    title: null,
+    hidden,
+    content: [],
+    resolvedContent: "",
+    headings: [],
+    refSlug: "",
+    domId: "",
+  };
+}
+
+function defaultConfig() {
+  return {
+    font: "Arial, sans-serif",
+    monoFont: "Consolas, monospace",
+    baseSize: "16px",
+    titleSize: "3rem",
+    h1Size: "2rem",
+    h2Size: "1.5rem",
+    h3Size: "1.25rem",
+    h4Size: "1.1rem",
+    h5Size: "1rem",
+    h6Size: "0.9rem",
+    lineHeight: "1.6",
+    contentWidth: "900px",
+    stylePresets: {},
+  };
+}
+
+function parseWmd(source) {
+  const lines = stripBom(source).split(/\r?\n/);
+  const config = defaultConfig();
+
+  const vars = {};
+  const tabs = [];
+  let currentTab = null;
+  let inConfig = false;
+
+  for (const line of lines) {
+    if (line.trim() === "@config") {
+      inConfig = true;
+      continue;
+    }
+
+    if (line.trim() === "@endconfig") {
+      inConfig = false;
+      continue;
+    }
+
+    if (inConfig) {
+      parseConfigLine(line, config);
+      continue;
+    }
+
+    if (parseVarLine(line, vars)) {
+      continue;
+    }
+
+    if (line.startsWith("@tab ")) {
+      const tabInfo = parseTabLine(line);
+      currentTab = createTab(tabInfo.name, tabInfo.hidden);
+      tabs.push(currentTab);
+      continue;
+    }
+
+    if (!currentTab) {
+      if (line.trim() === "") continue;
+
+      currentTab = createTab("Main", false);
+      tabs.push(currentTab);
+    }
+
+    if (line.startsWith("@title ")) {
+      currentTab.title = line.slice("@title ".length).trim();
+      continue;
+    }
+
+    if (line.trim() === "@hidden") {
+      currentTab.hidden = true;
+      continue;
+    }
+
+    currentTab.content.push(line);
+  }
+
+  return { config, vars, tabs };
+}
+
+function finalizeTabs(tabs, warnings) {
+  const tabsBySlug = new Map();
+  const domIdCounts = new Map();
+
+  tabs.forEach((tab, index) => {
+    if (!tab.name.trim()) {
+      tab.name = `Tab ${index + 1}`;
+      warnings.push(`Unnamed tab detected at position ${index + 1}; using "${tab.name}".`);
+    }
+
+    const refSlug = slugify(tab.name) || `tab-${index + 1}`;
+    const domCount = (domIdCounts.get(refSlug) || 0) + 1;
+
+    domIdCounts.set(refSlug, domCount);
+    tab.refSlug = refSlug;
+    tab.domId = domCount === 1 ? refSlug : `${refSlug}-${domCount}`;
+
+    if (tabsBySlug.has(refSlug)) {
+      warnings.push(`Duplicate tab name "${tab.name}" detected; links and includes will target the first matching tab.`);
+      return;
+    }
+
+    tabsBySlug.set(refSlug, tab);
+  });
+
+  return tabsBySlug;
+}
+
+function inlineTextFromChildren(children) {
+  if (!Array.isArray(children)) return "";
+
+  return children
+    .map((child) => {
+      if (child.type === "text" || child.type === "code_inline") {
+        return child.content;
+      }
+
+      if (child.type === "softbreak" || child.type === "hardbreak") {
+        return " ";
+      }
+
+      if (child.type === "image") {
+        return child.content || "";
+      }
+
+      return "";
+    })
+    .join("");
+}
+
+function createUniqueId(baseId, counts) {
+  const count = (counts.get(baseId) || 0) + 1;
+  counts.set(baseId, count);
+  return count === 1 ? baseId : `${baseId}-${count}`;
+}
+
+function collectHeadings(md, tab, config) {
+  const prepared = prepareStyleMarkers(tab.resolvedContent, config.stylePresets);
+  const tokens = md.parse(prepared.markdown, {});
+  const headings = [];
+  const idCounts = new Map();
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i];
+    if (open.type !== "heading_open") continue;
+
+    const inline = tokens[i + 1];
+    const rawText = cleanHeadingText(inlineTextFromChildren(inline && inline.children));
+    const text = rawText || `Section ${headings.length + 1}`;
+    const headingSlug = slugify(rawText) || `section-${headings.length + 1}`;
+    const anchorKey = `${tab.refSlug}-${headingSlug}`;
+    const baseId = `${tab.domId}-${headingSlug}`;
+    const id = createUniqueId(baseId, idCounts);
+
+    headings.push({
+      tabName: tab.name,
+      tabRefSlug: tab.refSlug,
+      tabDomId: tab.domId,
+      level: Number(open.tag.slice(1)),
+      text,
+      hidden: tab.hidden,
+      anchorKey,
+      id,
+    });
+  }
+
+  return headings;
+}
+
+function applyHeadingIdsToTokens(tokens, headings) {
+  let headingIndex = 0;
+
+  for (const token of tokens) {
+    if (token.type !== "heading_open") continue;
+
+    const heading = headings[headingIndex];
+    headingIndex += 1;
+
+    if (heading) {
+      token.attrSet("id", heading.id);
+    }
+  }
+}
+
+function customMarkerPresets(stylePresets) {
+  return Object.values(stylePresets || {})
+    .filter((preset) => preset && wmdFormattingInfo(preset.wmdFormatting, preset.name).customMarker)
+    .sort((a, b) => String(b.wmdFormatting || "").length - String(a.wmdFormatting || "").length);
+}
+
+function applyCustomMarkerLine(line, presets) {
+  for (const preset of presets) {
+    const marker = normalizeWmdFormatting(preset.wmdFormatting);
+    if (!marker) continue;
+    const match = String(line).match(new RegExp(`^(\\s*)${escapeRegExp(marker)}(?:\\s+|$)([\\s\\S]*)$`));
+    if (!match) continue;
+    const info = wmdFormattingInfo(marker, preset.name);
+    const text = match[2] || preset.name || "Heading";
+    const markdown = info.block === "heading" ? `${match[1]}## ${text}` : `${match[1]}${text}`;
+    return { markdown, preset: preset.id };
+  }
+  return null;
+}
+
+function prepareStyleMarkers(markdown, stylePresets = {}) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  const markers = new Map();
+  const customPresets = customMarkerPresets(stylePresets);
+  let currentStyle = "";
+
+  const prepared = lines.map((line, index) => {
+    const start = line.trim().match(/^@style\s+(.+?)\s*$/i);
+    if (start) {
+      currentStyle = normalizeStyleName(start[1]);
+      return "";
+    }
+
+    if (/^@end(?:style)?\s*$/i.test(line.trim())) {
+      currentStyle = "";
+      return "";
+    }
+
+    const custom = !currentStyle ? applyCustomMarkerLine(line, customPresets) : null;
+    if (custom) {
+      markers.set(index, custom.preset);
+      return custom.markdown;
+    }
+
+    if (line.trim() && currentStyle) markers.set(index, currentStyle);
+    return line;
+  });
+
+  return { markdown: prepared.join("\n"), markers };
+}
+
+function applyPresetMarkersToTokens(tokens, markers) {
+  for (const token of tokens) {
+    if (!["heading_open", "paragraph_open", "bullet_list_open", "ordered_list_open", "blockquote_open", "table_open", "wmd_callout_open"].includes(token.type)) continue;
+    const sourceLine = token.map && token.map[0];
+    const preset = markers.get(sourceLine);
+    if (!preset) continue;
+    token.attrJoin("class", `wmd-preset-${preset}`);
+    token.attrSet("data-wmd-preset", preset);
+  }
+}
+
+function extractHeadingSection(markdown, headingName) {
+  const lines = markdown.split(/\r?\n/);
+  const md = makeMarkdownIt();
+  const tokens = md.parse(markdown, {});
+  const wantedSlug = slugify(headingName);
+  let start = -1;
+  let startLevel = 0;
+  let end = lines.length;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i];
+    if (open.type !== "heading_open") continue;
+
+    const inline = tokens[i + 1];
+    const level = Number(open.tag.slice(1));
+    const text = cleanHeadingText(inlineTextFromChildren(inline && inline.children));
+    const lineNumber = open.map ? open.map[0] : -1;
+
+    if (start === -1 && slugify(text) === wantedSlug) {
+      start = lineNumber;
+      startLevel = level;
+      continue;
+    }
+
+    if (start !== -1 && level <= startLevel) {
+      end = lineNumber;
+      break;
+    }
+  }
+
+  if (start === -1) return null;
+  return lines.slice(start, end).join("\n");
+}
+
+function getTargetMarkdown(targetRaw, tabsBySlug, warnings, sourceTabName) {
+  const target = parseTarget(targetRaw);
+  const tab = tabsBySlug.get(target.tabSlug);
+
+  if (!tab) {
+    warnings.push(`Broken include in ${sourceTabName}: tab does not exist: ${target.raw}`);
+    return "";
+  }
+
+  const rawMarkdown = tab.content.join("\n");
+
+  if (!target.headingName) {
+    return rawMarkdown;
+  }
+
+  const section = extractHeadingSection(rawMarkdown, target.headingName);
+
+  if (section === null) {
+    warnings.push(`Broken include in ${sourceTabName}: heading does not exist: ${target.raw}`);
+    return "";
+  }
+
+  return section;
+}
+
+function resolveIncludes(markdown, tabsBySlug, warnings, sourceTabName, stack = []) {
+  const lines = markdown.split(/\r?\n/);
+  const out = [];
+
+  for (const line of lines) {
+    const match = line.trim().match(/^@(include|embed)\s+(.+)$/);
+
+    if (!match) {
+      out.push(line);
+      continue;
+    }
+
+    const targetRaw = match[2].trim();
+    const stackKey = `${sourceTabName} -> ${targetRaw}`.toLowerCase();
+
+    if (stack.includes(stackKey)) {
+      warnings.push(`Circular include skipped in ${sourceTabName}: ${targetRaw}`);
+      continue;
+    }
+
+    const targetMarkdown = getTargetMarkdown(targetRaw, tabsBySlug, warnings, sourceTabName);
+    const resolved = resolveIncludes(
+      targetMarkdown,
+      tabsBySlug,
+      warnings,
+      sourceTabName,
+      [...stack, stackKey]
+    );
+
+    out.push(resolved);
+  }
+
+  return out.join("\n");
+}
+
+function applyVars(markdown, vars, warnings, sourceTabName) {
+  return markdown.replace(/\{\{([A-Za-z][\w-]*)\}\}/g, (match, name) => {
+    if (Object.prototype.hasOwnProperty.call(vars, name)) {
+      return vars[name];
+    }
+
+    warnings.push(`Unknown variable in ${sourceTabName}: {{${name}}}`);
+    return match;
+  });
+}
+
+function uniqueWarnings(warnings) {
+  return [...new Set(warnings)];
+}
+
+)}`;
+  });
+
+  return { markdown: protectedMarkdown, values };
+}
+
+function restoreMathDelimiters(html, values) {
+  return String(html || "").replace(/WMDMATHPLACEHOLDER(\d+)TOKEN/g, (match, index) => {
+    const value = values[Number(index)];
+    return value === undefined ? match : escapeHtml(value);
+  });
+}
+
+function parseFragmentSource(source) {
+  const lines = stripBom(source).split(/\r?\n/);
+  const config = defaultConfig();
+  const vars = {};
+  const body = [];
+  const warnings = [];
+  let inConfig = false;
+
+  for (const line of lines) {
+    if (line.trim() === "@config") {
+      inConfig = true;
+      continue;
+    }
+
+    if (line.trim() === "@endconfig") {
+      inConfig = false;
+      continue;
+    }
+
+    if (inConfig) {
+      parseConfigLine(line, config);
+      continue;
+    }
+
+    if (parseVarLine(line, vars)) continue;
+
+    if (line.startsWith("@tab ") || line.trim() === "@hidden") {
+      warnings.push("Tab directives are ignored when WikiMD is rendered as a fragment.");
+      continue;
+    }
+
+    if (line.startsWith("@title ")) {
+      warnings.push("@title is ignored in fragment mode; provide the title outside the WikiMD body.");
+      continue;
+    }
+
+    body.push(line);
+  }
+
+  return { config, vars, markdown: body.join("\n"), warnings };
+}
+
+function renderFragment(source, options = {}) {
+  const parsed = parseFragmentSource(String(source || ""));
+  const warnings = [...parsed.warnings];
+  const withVars = applyVars(parsed.markdown, parsed.vars, warnings, "document");
+  const math = protectMathDelimiters(withVars);
+  const md = makeMarkdownIt({ html: options.html !== false, tabs: false });
+
+  const tab = {
+    name: "Document",
+    refSlug: "document",
+    domId: "document",
+    hidden: false,
+    resolvedContent: math.markdown,
+  };
+
+  tab.headings = collectHeadings(md, tab, parsed.config);
+
+  const headingAnchors = new Map();
+  for (const heading of tab.headings) {
+    if (!headingAnchors.has(heading.anchorKey)) {
+      headingAnchors.set(heading.anchorKey, heading.id);
+    }
+  }
+
+  const html = renderTab(md, tab, {
+    tabAnchors: new Map(),
+    headingAnchors,
+    warnings,
+    currentTabName: tab.name,
+    currentTabSlug: tab.refSlug,
+    currentTabHeadings: tab.headings,
+    stylePresets: parsed.config.stylePresets,
+  }, parsed.config);
+
+  return {
+    html: restoreMathDelimiters(html, math.values),
+    css: stylePresetCss(parsed.config.stylePresets),
+    warnings: uniqueWarnings(warnings),
+  };
 }
 
 function renderTab(md, tab, env, config) {
@@ -2273,6 +3412,7 @@ module.exports = {
   compile,
   compileFile,
   parseArgs,
+  renderFragment,
   startPreviewServer,
   watchFile,
 };
