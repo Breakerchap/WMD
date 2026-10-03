@@ -1,212 +1,130 @@
-# Semi-MD / WMD
+# WikiMD
 
-This project compiles `.wmd` files into a single interactive HTML document with tabs, includes, callouts, collapsible sections, and heading search. Theme choice belongs to the editor or host application, not to individual documents.
+WikiMD is a small Markdown-derived document format that compiles `.wmd` files into self-contained interactive HTML.
 
-Generated `.html` preview files are treated as build artifacts and are ignored by git.
+This repository intentionally contains only two user-facing pieces:
 
-## Commands
+- the **WikiMD compiler** (`wmd-compiler.js`)
+- the **VS Code extension** (`vscode-extension/`)
 
-```bash
-npm run build
-npm run watch
-npm run serve
-npm run dev
-npm test
-```
+Tests, package metadata, and the licence remain only to support those two pieces.
 
-- `build` compiles the file you pass in, or defaults to `example.wmd -> output.html`
-- `watch` recompiles the file you pass in, or defaults to `example.wmd`
-- `serve` starts a local preview server at `http://127.0.0.1:4312`
-- `dev` starts the preview server and live reload workflow
+## Requirements
 
-If PowerShell blocks `npm.ps1` on your machine, use the direct Node commands instead:
+- Node.js 18 or newer
+- npm
+
+Install the compiler dependency once:
 
 ```bash
-node wmd-compiler.js
-node wmd-compiler.js --watch
-node wmd-compiler.js --serve
-node --test
+npm ci
 ```
 
-## Web editor branch
+## Compiler
 
-The `web-editor` branch adds a local, collaborative browser editor without changing the normal compiler workflow on `main`.
+Compile a file:
 
 ```bash
-git switch web-editor
-node web/server.js
+node wmd-compiler.js notes.wmd
 ```
 
-Then open `http://127.0.0.1:4313`. It opens in an editable version of the actual compiled document, with a toggle to syntax-highlighted raw WMD. The Docs-style toolbar provides document style, font, size, zoom, formatting, links, images, headings, lists, callouts, tabs, and undo/redo. The workspace also has resizable/hideable panes, MD/WMD/DOCX import, and `.wmd` downloads.
+If the output path is omitted, WikiMD writes a sibling HTML file with the same base name, so `notes.wmd` becomes `notes.html`.
 
-Settings are stored per browser and include your username, cursor color, global theme, main color palette, default editor mode, and text macros such as `--` becoming an en dash. Document styles now live in the WMD `@config` block, so collaborators get the same shortcuts and formatting. Select a Title, Heading, Normal Text, or custom-styled block to change its shared font, size, block type, callout type, checklist/list behaviour, highlight, and formatting from the toolbar; every block using that style updates together. The `Style` toolbar button creates or edits config-backed styles and can record a keybind by clicking **Record** and pressing the shortcut. Use `++underlined text++` for persistent WMD underline.
-
-Style presets use readable config lines:
-
-```wmd
-@config
-Title: {keybind: Ctrl+Shift+`; size: 3rem; font: Arial; bold: true; heading: 1};
-Heading 1: {keybind: Ctrl+Shift+1; size: 2rem; font: Arial; bold: true; heading: 1};
-Italic List: {keybind: Ctrl+Alt+L; italic: true; unordered-list: true};
-Warning Box: {keybind: Ctrl+Alt+W; callout: warning; bold: true};
-@endconfig
-```
-
-Custom style assignments are preserved with a start marker and the shorter `@end` marker:
-
-```wmd
-@style Warning Box
-Remember the dragon's reaction.
-@end
-```
-
-Saved browser documents live in `web/data/`, which is intentionally ignored by Git. The browser also keeps a local recovery copy for every document and sync server, so an edit made while offline is restored after a refresh or reconnect.
-
-For collaborators on your local network, start the server with `node web/server.js --host 0.0.0.0` (or `npm run web:lan`) and share your computer's LAN address, such as `http://192.168.1.20:4313/?doc=team-notes`. This editor intentionally has no sign-in system yet, so only use LAN mode on a network you trust.
-
-For people on different networks, run the same server on an HTTPS-accessible host or behind a secure tunnel, then open and share that public editor URL. The server accepts cross-origin sync requests, so a local editor can also connect through **Settings -> Sync server URL**. When launching behind a public address, this prints the intended share base in the terminal:
+Choose the output path explicitly when needed:
 
 ```bash
-node web/server.js --host 0.0.0.0 --public-url https://docs.example.com
+node wmd-compiler.js notes.wmd site/notes.html
 ```
 
-The public host must provide its own access control (for example, a VPN, authenticated reverse proxy, or a private tunnel) before it is shared outside a trusted group. WMD Studio does not yet include accounts or document permissions.
-
-### Quick internet sharing
-
-`ngrok` is available on this Windows machine, so you can share a temporary HTTPS link without changing router settings:
-
-```powershell
-# Terminal 1: keep the editor running
-npm run web
-
-# Terminal 2: create the public URL, then share the https:// address it prints
-npm run web:share
-```
-
-The link works only while both terminals remain open. If ngrok asks for an auth token, follow its one-time setup prompt, then run `npm run web:share` again. For a longer-lived shared editor, use a named tunnel or an HTTPS host with access control.
-
-You can also point the compiler at another file:
+Watch for changes:
 
 ```bash
-node wmd-compiler.js my-notes.wmd my-notes.html
-node wmd-compiler.js --watch my-notes.wmd my-notes.html
-node wmd-compiler.js --serve my-notes.wmd my-notes.html --port 4400
+node wmd-compiler.js --watch notes.wmd
 ```
 
-## VS Code workflow
+Start the local live-preview server:
 
-The repo now includes workspace tasks in `.vscode/tasks.json`.
+```bash
+node wmd-compiler.js --serve notes.wmd
+node wmd-compiler.js --serve notes.wmd --port 4400
+```
 
-- `WMD: Build` compiles the currently focused `.wmd` file to a sibling `.html` file
-- `WMD: Watch` watches the currently focused `.wmd` file
-- `WMD: Dev Server` starts live preview for the currently focused `.wmd` file on `http://127.0.0.1:4312`
-- `WMD: Launch Side Preview` starts the dev server for the currently focused `.wmd` file and opens the preview in a VS Code editor tab
+Run `node wmd-compiler.js --help` for the full CLI reference.
 
-`*.wmd` files are also associated with Markdown in workspace settings, so editing feels natural inside VS Code.
+The npm scripts are thin aliases, so arguments go after `--`:
 
-For a live in-editor preview:
+```bash
+npm run build -- notes.wmd
+npm run watch -- notes.wmd
+npm run serve -- notes.wmd
+```
 
-1. Run `Terminal: Run Task`
-2. Choose `WMD: Launch Side Preview`
+### Supported WMD features
 
-Tip:
+The compiler supports tabs, hidden tabs, titles, variables, includes/embeds, per-tab tables of contents, wiki links, callouts, collapsible sections, style presets, custom heading/callout markers, task lists, tables, highlighting, underline, and standard Markdown links/code.
 
-- Click into the `.wmd` file you want first, then run the task
-- `notes.wmd` will compile to `notes.html` in the same folder
-
-Important:
-
-- Open the server URL, not `output.html`, if you want automatic page reloads
-- `output.html` still updates on disk, but a file tab or plain file:// browser tab will not live-refresh itself
-- If the compiler hits a hard error, the browser view swaps to an error page and the terminal / Problems panel will show the same error
-
-## Supported syntax
-
-### Tabs
+A minimal document:
 
 ```wmd
 @tab Home
-@title My Document
-```
+@title My notes
 
-Hidden tabs:
+# Start here
 
-```wmd
-@tab GM Notes {hidden}
-```
+See [[Reference#Details|the details]].
 
-or
-
-```wmd
-@tab GM Notes
-@hidden
-```
-
-### Variables
-
-```wmd
-@var baseEnergy = 10
-Use it like {{baseEnergy}}.
-```
-
-### Includes and embeds
-
-```wmd
-@include Combat#Damage
-@embed Combat#Damage
-```
-
-### Table of contents
-
-```wmd
-@toc
-@toc depth: 3
-```
-
-### Callouts
-
-```wmd
-!note Optional title
-Content.
+!note Remember
+This is a callout.
 !end
 
-!warning Optional title
-Content.
-!end
-
-!rule Optional title
-Content.
-!end
+@tab Reference
+## Details
+More text.
 ```
 
-### Collapsible sections
+## VS Code extension
 
-```wmd
-@collapse Optional title
-Hidden content.
-@endcollapse
+The extension lives in `vscode-extension/`. It provides:
+
+- a dedicated `.wmd` language mode
+- syntax highlighting
+- snippets and completions
+- smart delimiter typing
+- a basic formatter
+- WMD Dark and WMD Light themes
+- an editor-title **Open Live Preview** command
+
+For local installation, copy the `vscode-extension` folder into your VS Code extensions directory and reload VS Code.
+
+The live preview searches workspace roots for `wmd-compiler.js`. If the compiler lives elsewhere, set **WikiMD: Compiler Path** (`wmd.compilerPath`). You can also configure the Node executable and preview port with `wmd.nodePath` and `wmd.previewPort`.
+
+## Development
+
+Run the retained tests:
+
+```bash
+npm test
 ```
 
-### Wiki links
+Run syntax checks plus tests:
 
-```wmd
-[[Combat]]
-[[Combat#Damage]]
-[[Combat#Damage|Read the damage rules]]
+```bash
+npm run check
 ```
 
-## Recent fixes
+## Repository layout
 
-- Added a real CLI with `build`, `watch`, `serve`, and `dev` flows
-- Added a VS Code task setup for fast compile and live preview
-- Fixed broken text encoding in the generated UI markers and CLI output
-- Fixed duplicate heading IDs by generating stable unique anchors
-- Fixed heading detection so fenced code block content does not become real document headings
-- Added duplicate tab-name warnings instead of silently breaking links and includes
-- Replaced `color-mix(...)` styling with simpler compatible surfaces
-- Updated the README to match the actual project files and workflow
+```text
+WikiMD/
+├─ wmd-compiler.js
+├─ vscode-extension/
+├─ test/
+├─ package.json
+├─ package-lock.json
+├─ README.md
+└─ LICENSE
+```
 
-## License
+## Licence
 
-This project is licensed under the GNU GPL v3.0 or later. See [LICENSE](C:/Users/Remy/Documents/CodingProjects/semi-md/LICENSE).
+WikiMD is licensed under the GNU GPL v3.0 or later. See [LICENSE](LICENSE).
