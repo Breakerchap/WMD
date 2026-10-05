@@ -137,7 +137,7 @@ npm run serve -- notes.wmd
 
 ### Supported WMD features
 
-The compiler supports tabs, hidden tabs, titles, variables, includes/embeds, per-tab tables of contents, wiki links, callouts, collapsible sections, style presets, custom heading/callout markers, task lists, tables, highlighting, underline, and standard Markdown links/code.
+The compiler supports tabs, hidden tabs, titles, variables, includes/embeds, per-tab tables of contents, wiki links, inline mentions, prose blocks, callouts, collapsible sections, style presets, custom heading/callout markers, task lists, tables, highlighting, underline, and standard Markdown links/code.
 
 A minimal document:
 
@@ -156,6 +156,22 @@ This is a callout.
 @tab Reference
 ## Details
 More text.
+```
+
+Use `<<...>>` when referring to a word or phrase as an object of discussion:
+
+```wmd
+Use an <<en-dash>> to mark the interruption.
+```
+
+Use `<<<` and `>>>` on their own lines for a prose passage. Normal WMD formatting still works inside:
+
+```wmd
+<<<
+The bottles had been smashed against the sandstone wall.
+
+This line can still contain *bold text* or <<a mentioned phrase>>.
+>>>
 ```
 
 ## VS Code extension
