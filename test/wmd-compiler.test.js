@@ -146,10 +146,10 @@ Text immediately before the prose block.
 This is prose.
 ]]]`);
 
-  assert.match(result.html, /<p>Text immediately before the prose block.</p>/);
-  assert.match(result.html, /<div class="wmd-prose-block">/);
-  assert.match(result.html, /<p>This is prose.</p>/);
-  assert.doesNotMatch(result.html, /<p>[sS]*[[[/);
+  assert.ok(result.html.includes("<p>Text immediately before the prose block.</p>"));
+  assert.ok(result.html.includes('<div class="wmd-prose-block">'));
+  assert.ok(result.html.includes("<p>This is prose.</p>"));
+  assert.ok(!result.html.includes("[[["));
 });
 
 test("callouts interrupt a preceding paragraph without a blank line", () => {
@@ -159,9 +159,9 @@ Text immediately before the callout.
 This is something worth pointing out.
 !end`);
 
-  assert.match(result.html, /<p>Text immediately before the callout.</p>/);
-  assert.match(result.html, /<div class="callout callout-note">/);
-  assert.match(result.html, /<div class="callout-title">Important</div>/);
+  assert.ok(result.html.includes("<p>Text immediately before the callout.</p>"));
+  assert.ok(result.html.includes('<div class="callout callout-note">'));
+  assert.ok(result.html.includes('<div class="callout-title">Important</div>'));
 });
 
 test("collapsible sections interrupt a preceding paragraph without a blank line", () => {
@@ -171,9 +171,9 @@ Text immediately before the collapse.
 Hidden content.
 @endcollapse`);
 
-  assert.match(result.html, /<p>Text immediately before the collapse.</p>/);
-  assert.match(result.html, /<details class="collapse">/);
-  assert.match(result.html, /<summary>More</summary>/);
+  assert.ok(result.html.includes("<p>Text immediately before the collapse.</p>"));
+  assert.ok(result.html.includes('<details class="collapse">'));
+  assert.ok(result.html.includes("<summary>More</summary>"));
 });
 
 test("prose blocks render inside collapsible sections without a blank line", () => {
@@ -187,9 +187,10 @@ Stand in the desert.
 ]]]
 @endcollapse`);
 
-  assert.match(result.html, /<details class="collapse">[sS]*<div class="wmd-prose-block">/);
-  assert.match(result.html, /I met a traveller from an antique land/);
-  assert.doesNotMatch(result.html, />[[[</);
+  assert.ok(result.html.includes('<details class="collapse">'));
+  assert.ok(result.html.includes('<div class="wmd-prose-block">'));
+  assert.ok(result.html.includes("I met a traveller from an antique land"));
+  assert.ok(!result.html.includes("[[["));
 });
 
 test("duplicate tab names are warned about and get unique section ids", () => {
