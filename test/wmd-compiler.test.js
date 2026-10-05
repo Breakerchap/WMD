@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const path = require("node:path");
 
-const { compile, parseArgs } = require("../wmd-compiler.js");
+const { compile, parseArgs, renderFragment } = require("../wmd-compiler.js");
 
 test("parseArgs supports positional files and serve mode", () => {
   const options = parseArgs(["--serve", "notes.wmd", "notes.html", "--port", "4500"]);
@@ -202,4 +202,48 @@ test("multi-paragraph blockquotes keep separate paragraphs", () => {
     result.html,
     /<blockquote class="wmd-blockquote">\s*<p>First paragraph<\/p>\s*<p>Second paragraph<\/p>\s*<\/blockquote>/
   );
+});
+
+
+test("inline mentions render with prose typography without affecting wiki links", () => {
+  const result = compile(`@tab Home
+Use an <<en-dash>> here.
+
+[[Home|Back home]]`);
+
+  assert.match(result.html, /<span class="wmd-mention">en-dash<\/span>/);
+  assert.match(result.html, /href="#home">Back home<\/a>/);
+  assert.match(result.html, /\.wmd-mention\{font-family:/);
+});
+
+test("prose blocks render normal WMD inside a prose container", () => {
+  const result = compile(`@tab Home
+Before
+
+<<<
+This is *finished prose*.
+
+And this is a second paragraph with <<a mentioned phrase>>.
+>>>
+
+After`);
+
+  assert.match(result.html, /<div class="wmd-prose-block">/);
+  assert.match(result.html, /<strong>finished prose<\/strong>/);
+  assert.match(result.html, /<span class="wmd-mention">a mentioned phrase<\/span>/);
+  assert.match(result.html, /<p>And this is a second paragraph/);
+  assert.match(result.html, /\.wmd-prose-block\{font-family:/);
+});
+
+test("fragment rendering returns mention and prose-block styles", () => {
+  const result = renderFragment(`A <<term>>.
+
+<<<
+A prose paragraph.
+>>>`);
+
+  assert.match(result.html, /class="wmd-mention"/);
+  assert.match(result.html, /class="wmd-prose-block"/);
+  assert.match(result.css, /\.wmd-mention\{/);
+  assert.match(result.css, /\.wmd-prose-block\{/);
 });
