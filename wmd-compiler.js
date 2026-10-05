@@ -65,57 +65,7 @@ function getFenceStart(line) {
 function isFenceEnd(line, fence) {
   if (!fence) return false;
   const marker = escapeRegExp(fence.marker);
-  return new RegExp(`^ {0,3}${marker}{${fence.length},}\\s*#!/usr/bin/env node
-const fs = require("fs");
-const http = require("http");
-const path = require("path");
-const MarkdownIt = require("markdown-it");
-
-const DEFAULT_PORT = 4312;
-const WATCH_DEBOUNCE_MS = 120;
-
-function defaultOutputPath(inputPath) {
-  const parsed = path.parse(inputPath);
-  return path.join(parsed.dir, `${parsed.name}.html`);
-}
-
-function slugify(text) {
-  return String(text || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function escapeRegExp(value) {
-  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function niceLabel(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function cleanHeadingText(text) {
-  return String(text || "")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, "$2")
-    .replace(/<<([^>]+)>>/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[*_`#=]/g, "")
-    .trim();
-}
-
-).test(String(line || ""));
+  return new RegExp("^ {0,3}" + marker + "{" + fence.length + ",}\\s*$").test(String(line || ""));
 }
 
 function transformOutsideFencedCode(markdown, transformLine) {

@@ -110,7 +110,7 @@ test("fenced code info strings become language classes", () => {
 });
 
 test("fragment rendering leaves WMD directives inside fenced code untouched", () => {
-  const result = renderFragment(`\`\`wmd
+  const result = renderFragment(`\`\`\`wmd
 @tab Fake
 @title Fake
 @hidden
