@@ -92,8 +92,8 @@
   ],
   "folding": {
     "markers": {
-      "start": "^\\s*(?:@config\\b|@collapse\\b|@style\\b|!(?:note|tip|info|warning|danger|rule|example)\\b)",
-      "end": "^\\s*(?:@endconfig\\b|@endcollapse\\b|@end(?:style)?\\b|!end\\b)"
+      "start": "^\\s*(?:<<<\\s*$|@config\\b|@collapse\\b|@style\\b|!(?:note|tip|info|warning|danger|rule|example)\\b)",
+      "end": "^\\s*(?:>>>\\s*$|@endconfig\\b|@endcollapse\\b|@end(?:style)?\\b|!end\\b)"
     }
   }
 }
