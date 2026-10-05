@@ -42,13 +42,15 @@ function activate(context) {
           item("red highlight", "WMD highlight", "===${1:warning note}===");
           item("wiki link", "WMD link", "[[${1:Tab Name}${2:#Heading}|${3:Label}]]");
           item("wiki link bare", "WMD link", "[[${1:Tab Name}${2:#Heading}]]");
+          item("mention", "WMD inline mention", "<<${1:term or phrase}>>");
+          item("prose block", "WMD prose block", "<<<\n${1:prose}\n>>>");
           item("bold", "WMD bold", "*${1:bold text}*");
           item("italic", "WMD italic", "_${1:italic text}_");
 
           return items;
         }
       },
-      "@", "[", "=", "*", "_"
+      "@", "[", "<", "=", "*", "_"
     )
   );
 
