@@ -165,10 +165,12 @@ function prosePlugin(md) {
     return true;
   });
 
-  md.block.ruler.before("paragraph", "wmd_prose_block", (state, startLine, endLine, silent) => {
+  md.block.ruler.before("blockquote", "wmd_prose_block", (state, startLine, endLine, silent) => {
     const start = state.bMarks[startLine] + state.tShift[startLine];
     const max = state.eMarks[startLine];
-    if (state.src.slice(start, max).trim() !== "<<<") return false;
+    const opener = state.src.slice(start, max).trim();
+    const closer = opener === "[[[" ? "]]]" : opener === "<<<" ? ">>>" : "";
+    if (!closer) return false;
 
     let nextLine = startLine + 1;
     const contentLines = [];
@@ -178,7 +180,7 @@ function prosePlugin(md) {
       const lineMax = state.eMarks[nextLine];
       const text = state.src.slice(pos, lineMax);
 
-      if (text.trim() === ">>>") break;
+      if (text.trim() === closer) break;
 
       contentLines.push(text);
       nextLine++;
