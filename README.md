@@ -72,7 +72,7 @@ const result = renderFragment(source, { html: true });
 // result.warnings - compiler warnings
 ```
 
-Fragment mode keeps WMD formatting features but deliberately ignores `@tab`, `@hidden`, and `@title`. With `html: true`, raw HTML can be embedded in the WMD source. LaTeX delimiters such as `$...$`, `\\(...\\)`, and `\\[...\\]` are preserved for a host renderer such as KaTeX.
+Fragment mode keeps WMD formatting features but deliberately ignores `@tab`, `@hidden`, and `@title`. With `html: true`, raw HTML can be embedded in the WMD source. LaTeX delimiters such as `$...$`, `\(...\)`, and `\[...\]` are preserved for a host renderer such as KaTeX.
 
 ### Supported WMD features
 
