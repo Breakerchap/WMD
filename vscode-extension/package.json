@@ -1,7 +1,7 @@
 {
-  "name": "wikimd",
-  "displayName": "WikiMD",
-  "description": "Language support, formatting, snippets, and live preview for WikiMD (.wmd) files.",
+  "name": "wmd",
+  "displayName": "WMD – Wiki Markup Dialect",
+  "description": "Language support, formatting, snippets, and live preview for WMD (Wiki Markup Dialect) files.",
   "version": "0.3.0",
   "publisher": "local",
   "engines": {
@@ -22,7 +22,7 @@
       {
         "id": "wmd",
         "aliases": [
-          "Wiki Markdown",
+          "Wiki Markup Dialect",
           "WMD",
           "wmd"
         ],
@@ -88,19 +88,19 @@
       }
     },
     "configuration": {
-      "title": "WikiMD",
+      "title": "WMD",
       "properties": {
         "wmd.compilerPath": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Path to wmd-compiler.js. Leave empty to search workspace roots and the WikiMD repository."
+          "description": "Path to wmd-compiler.js. Leave empty to search workspace roots and the WMD repository."
         },
         "wmd.nodePath": {
           "type": "string",
           "default": "node",
           "scope": "machine",
-          "description": "Node.js executable used to run the WikiMD compiler."
+          "description": "Node.js executable used to run the WMD compiler."
         },
         "wmd.previewPort": {
           "type": "number",
@@ -108,7 +108,7 @@
           "minimum": 1,
           "maximum": 65535,
           "scope": "resource",
-          "description": "Port used by the WikiMD live preview server."
+          "description": "Port used by the WMD live preview server."
         }
       }
     }

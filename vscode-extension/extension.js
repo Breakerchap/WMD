@@ -13,7 +13,7 @@ let extensionRoot = "";
 
 function activate(context) {
   extensionRoot = context.extensionPath;
-  outputChannel = vscode.window.createOutputChannel("WikiMD Preview");
+  outputChannel = vscode.window.createOutputChannel("WMD Preview");
   context.subscriptions.push(outputChannel);
 
   context.subscriptions.push(
@@ -204,7 +204,7 @@ async function startOrRestartPreview(document, port) {
   const compilerPath = findCompilerPath();
   if (!compilerPath) {
     vscode.window.showErrorMessage(
-      "Could not find wmd-compiler.js. Open the WikiMD repo as your workspace or set wmd.compilerPath."
+      "Could not find wmd-compiler.js. Open the WMD repo as your workspace or set wmd.compilerPath."
     );
     return false;
   }

@@ -1214,12 +1214,12 @@ function parseFragmentSource(source) {
     if (parseVarLine(line, vars)) continue;
 
     if (line.startsWith("@tab ") || line.trim() === "@hidden") {
-      warnings.push("Tab directives are ignored when WikiMD is rendered as a fragment.");
+      warnings.push("Tab directives are ignored when WMD is rendered as a fragment.");
       continue;
     }
 
     if (line.startsWith("@title ")) {
-      warnings.push("@title is ignored in fragment mode; provide the title outside the WikiMD body.");
+      warnings.push("@title is ignored in fragment mode; provide the title outside the WMD body.");
       continue;
     }
 
@@ -2334,7 +2334,7 @@ function reportCompileError(error, inputPath = "") {
 }
 
 function printHelp() {
-  console.log(`WikiMD compiler
+  console.log(`WMD – Wiki Markup Dialect compiler
 
 Usage:
   node wmd-compiler.js <input.wmd> [output.html]

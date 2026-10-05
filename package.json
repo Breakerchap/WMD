@@ -1,8 +1,8 @@
 {
-  "name": "wikimd",
+  "name": "wmd",
   "version": "1.0.0",
   "private": true,
-  "description": "WikiMD compiler and VS Code extension.",
+  "description": "WMD (Wiki Markup Dialect) compiler and VS Code extension.",
   "main": "wmd-compiler.js",
   "bin": {
     "wmd": "./wmd-compiler.js"
@@ -18,7 +18,8 @@
   "keywords": [
     "markdown",
     "wiki",
-    "wikimd",
+    "markup",
+    "dialect",
     "wmd"
   ],
   "author": "Remy Ellis",

@@ -1,10 +1,10 @@
-# WikiMD VS Code extension
+# WMD – Wiki Markup Dialect VS Code extension
 
 Language support for `.wmd` files.
 
 ## Features
 
-- WikiMD syntax highlighting
+- WMD syntax highlighting
 - snippets and completions
 - smart pairing for `*`, `_`, `=`, and backticks
 - bracket, quote, backtick, and wiki-link auto-closing
@@ -18,7 +18,7 @@ Language support for `.wmd` files.
 Copy this folder to your VS Code extensions directory, for example on Windows:
 
 ```text
-%USERPROFILE%\.vscode\extensions\wikimd
+%USERPROFILE%\.vscode\extensions\wmd
 ```
 
 Then reload VS Code.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Wiki Markdown",
+  "name": "Wiki Markup Dialect",
   "scopeName": "text.wmd",
   "patterns": [
     {
