@@ -10,6 +10,9 @@
       "include": "#code-fences"
     },
     {
+      "include": "#wmd-prose-blocks"
+    },
+    {
       "include": "#wmd-callout-blocks"
     },
     {
@@ -23,6 +26,9 @@
     },
     {
       "include": "#wiki-links"
+    },
+    {
+      "include": "#inline-mention"
     },
     {
       "include": "#standard-links"
@@ -589,6 +595,85 @@
         {
           "match": "^\\s*(-{3,}|_{3,}|\\*{3,})\\s*$",
           "name": "punctuation.definition.thematic-break.wmd"
+        }
+      ]
+    },
+    "wmd-prose-blocks": {
+      "patterns": [
+        {
+          "name": "meta.prose.block.wmd",
+          "begin": "^\\s*(<<<)\\s*$",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.prose.begin.wmd"
+            }
+          },
+          "end": "^\\s*(>>>)\\s*$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.prose.end.wmd"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#headings"
+            },
+            {
+              "include": "#wiki-links"
+            },
+            {
+              "include": "#standard-links"
+            },
+            {
+              "include": "#variable-references"
+            },
+            {
+              "include": "#inline-code"
+            },
+            {
+              "include": "#inline-mention"
+            },
+            {
+              "include": "#highlight-red"
+            },
+            {
+              "include": "#highlight-orange"
+            },
+            {
+              "include": "#highlight-yellow"
+            },
+            {
+              "include": "#bold"
+            },
+            {
+              "include": "#italic"
+            },
+            {
+              "include": "#lists"
+            },
+            {
+              "include": "#blockquote"
+            }
+          ]
+        }
+      ]
+    },
+    "inline-mention": {
+      "patterns": [
+        {
+          "name": "meta.mention.inline.wmd",
+          "match": "(<<)(?!<)([^>\\n]+?)(>>)(?!>)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.mention.begin.wmd"
+            },
+            "2": {
+              "name": "markup.other.mention.wmd"
+            },
+            "3": {
+              "name": "punctuation.definition.mention.end.wmd"
+            }
+          }
         }
       ]
     }
