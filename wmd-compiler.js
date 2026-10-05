@@ -573,9 +573,22 @@ function parseStylePropertyBlock(rawValue) {
   return props;
 }
 
-function parseConfigLine(line, config) {
-  const trimmed = String(line || "").trim();
+function parseConfigLine(line, config, state = null) {
+  let trimmed = String(line || "").trim();
   if (!trimmed || trimmed.startsWith("//")) return;
+
+  if (state && state.pendingStyle) {
+    state.pendingStyle += " " + trimmed;
+    if (!/}\s*;?\s*$/.test(trimmed)) return;
+    trimmed = state.pendingStyle;
+    state.pendingStyle = "";
+  } else if (state) {
+    const styleStart = trimmed.match(/^([^:]+?)\s*:\s*(\{[\s\S]*)$/);
+    if (styleStart && !/}\s*;?\s*$/.test(styleStart[2])) {
+      state.pendingStyle = trimmed;
+      return;
+    }
+  }
 
   const match = trimmed.match(/^([^:]+?)\s*:\s*([\s\S]+?)\s*;?\s*$/);
   if (!match) return;
@@ -785,6 +798,7 @@ function parseWmd(source) {
   const tabs = [];
   let currentTab = null;
   let inConfig = false;
+  const configState = { pendingStyle: "" };
 
   for (const line of lines) {
     if (line.trim() === "@config") {
@@ -798,7 +812,7 @@ function parseWmd(source) {
     }
 
     if (inConfig) {
-      parseConfigLine(line, config);
+      parseConfigLine(line, config, configState);
       continue;
     }
 
@@ -1179,6 +1193,7 @@ function parseFragmentSource(source) {
   const body = [];
   const warnings = [];
   let inConfig = false;
+  const configState = { pendingStyle: "" };
 
   for (const line of lines) {
     if (line.trim() === "@config") {
@@ -1192,7 +1207,7 @@ function parseFragmentSource(source) {
     }
 
     if (inConfig) {
-      parseConfigLine(line, config);
+      parseConfigLine(line, config, configState);
       continue;
     }
 
