@@ -220,11 +220,11 @@ test("prose blocks render normal WMD inside a prose container", () => {
   const result = compile(`@tab Home
 Before
 
-<<<
+[[[
 This is *finished prose*.
 
 And this is a second paragraph with <<a mentioned phrase>>.
->>>
+]]]
 
 After`);
 
@@ -267,9 +267,9 @@ Over The
 test("fragment rendering returns mention and prose-block styles", () => {
   const result = renderFragment(`A <<term>>.
 
-<<<
+[[[
 A prose paragraph.
->>>`);
+]]]`);
 
   assert.match(result.html, /class="wmd-mention"/);
   assert.match(result.html, /class="wmd-prose-block"/);
