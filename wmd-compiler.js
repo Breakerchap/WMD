@@ -42,6 +42,7 @@ function cleanHeadingText(text) {
   return String(text || "")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, "$2")
+    .replace(/<<([^>]+)>>/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/[*_`#=]/g, "")
     .trim();
@@ -129,6 +130,85 @@ function wikiLinkPlugin(md) {
     state.pos = end + 2;
     return true;
   });
+}
+
+function prosePlugin(md) {
+  md.inline.ruler.before("link", "wmd_mention", (state, silent) => {
+    const start = state.pos;
+
+    if (state.src.slice(start, start + 2) !== "<<" || state.src.slice(start, start + 3) === "<<<") {
+      return false;
+    }
+
+    let end = start + 2;
+    while (end < state.src.length - 1) {
+      if (state.src[end] === "\\" && end + 1 < state.src.length) {
+        end += 2;
+        continue;
+      }
+      if (state.src.slice(end, end + 2) === ">>") break;
+      end++;
+    }
+
+    if (end >= state.src.length - 1 || end === start + 2) return false;
+
+    if (!silent) {
+      const open = state.push("wmd_mention_open", "span", 1);
+      open.attrs = [["class", "wmd-mention"]];
+
+      state.md.inline.parse(state.src.slice(start + 2, end), state.md, state.env, state.tokens);
+
+      state.push("wmd_mention_close", "span", -1);
+    }
+
+    state.pos = end + 2;
+    return true;
+  });
+
+  md.block.ruler.before("paragraph", "wmd_prose_block", (state, startLine, endLine, silent) => {
+    const start = state.bMarks[startLine] + state.tShift[startLine];
+    const max = state.eMarks[startLine];
+    if (state.src.slice(start, max).trim() !== "<<<") return false;
+
+    let nextLine = startLine + 1;
+    const contentLines = [];
+
+    while (nextLine < endLine) {
+      const pos = state.bMarks[nextLine] + state.tShift[nextLine];
+      const lineMax = state.eMarks[nextLine];
+      const text = state.src.slice(pos, lineMax);
+
+      if (text.trim() === ">>>") break;
+
+      contentLines.push(text);
+      nextLine++;
+    }
+
+    if (nextLine >= endLine) return false;
+    if (silent) return true;
+
+    const open = state.push("wmd_prose_block_open", "div", 1);
+    open.block = true;
+    open.map = [startLine, nextLine + 1];
+    open.attrs = [["class", "wmd-prose-block"]];
+
+    const nestedStart = state.tokens.length;
+    state.md.block.parse(contentLines.join("\n"), state.md, state.env, state.tokens);
+    for (const token of state.tokens.slice(nestedStart)) {
+      if (token.map) token.map = [token.map[0] + startLine + 1, token.map[1] + startLine + 1];
+    }
+
+    state.push("wmd_prose_block_close", "div", -1);
+    state.line = nextLine + 1;
+    return true;
+  });
+
+  md.renderer.rules.wmd_mention_open = (tokens, idx, options, env, self) =>
+    self.renderToken(tokens, idx, options);
+  md.renderer.rules.wmd_mention_close = () => "</span>";
+  md.renderer.rules.wmd_prose_block_open = (tokens, idx, options, env, self) =>
+    self.renderToken(tokens, idx, options) + "\n";
+  md.renderer.rules.wmd_prose_block_close = () => "</div>\n";
 }
 
 function customBoldPlugin(md) {
@@ -600,6 +680,10 @@ function stylePresetCss(stylePresets) {
   const baseCss = [
     ".wmd-blockquote > p:first-child{margin-top:0}",
     ".wmd-blockquote > p:last-child{margin-bottom:0}",
+    ".wmd-mention{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",Georgia,serif;font-size:1.04em;line-height:1.45;background:rgba(127,127,127,.09);background:color-mix(in srgb,currentColor 7%,transparent);padding:.04em .22em;border-radius:.18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}",
+    ".wmd-prose-block{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",Georgia,serif;font-size:1.075em;line-height:1.75;margin:1.5em 0;padding:.15em 0 .15em 1.15em;border-left:2px solid rgba(127,127,127,.28);border-left-color:color-mix(in srgb,currentColor 22%,transparent)}",
+    ".wmd-prose-block > :first-child{margin-top:0}",
+    ".wmd-prose-block > :last-child{margin-bottom:0}",
   ].join("\n  ");
 
   const presetCss = Object.values(stylePresets || {}).map((preset) => {
@@ -1041,6 +1125,7 @@ function makeMarkdownIt(options = {}) {
   md.disable("emphasis");
   md.enable("strikethrough");
   if (options.tabs !== false) md.use(wikiLinkPlugin);
+  md.use(prosePlugin);
   md.use(taskCheckboxPlugin);
   md.use(customBoldPlugin);
   md.use(customItalicPlugin);
