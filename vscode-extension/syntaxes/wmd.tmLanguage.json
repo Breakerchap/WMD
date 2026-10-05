@@ -602,6 +602,62 @@
       "patterns": [
         {
           "name": "meta.prose.block.wmd",
+          "begin": "^\\s*(\\[\\[\\[)\\s*$",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.prose.begin.wmd"
+            }
+          },
+          "end": "^\\s*(\\]\\]\\])\\s*$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.prose.end.wmd"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#headings"
+            },
+            {
+              "include": "#wiki-links"
+            },
+            {
+              "include": "#standard-links"
+            },
+            {
+              "include": "#variable-references"
+            },
+            {
+              "include": "#inline-code"
+            },
+            {
+              "include": "#inline-mention"
+            },
+            {
+              "include": "#highlight-red"
+            },
+            {
+              "include": "#highlight-orange"
+            },
+            {
+              "include": "#highlight-yellow"
+            },
+            {
+              "include": "#bold"
+            },
+            {
+              "include": "#italic"
+            },
+            {
+              "include": "#lists"
+            },
+            {
+              "include": "#blockquote"
+            }
+          ]
+        },
+        {
+          "name": "meta.prose.block.legacy.wmd",
           "begin": "^\\s*(<<<)\\s*$",
           "beginCaptures": {
             "1": {
