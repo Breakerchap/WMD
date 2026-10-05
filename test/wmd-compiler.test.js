@@ -181,3 +181,25 @@ Watch out
   assert.match(result.html, /<p>Watch out<\/p>/);
   assert.doesNotMatch(result.html, /wmd-preset-heading-a[^>]*>Watch out/);
 });
+
+
+test("blockquotes do not add outer paragraph spacing", () => {
+  const result = compile(`@tab Home
+> Quoted text`);
+
+  assert.match(result.html, /<blockquote class="wmd-blockquote">\s*<p>Quoted text<\/p>\s*<\/blockquote>/);
+  assert.match(result.html, /\.wmd-blockquote > p:first-child\{margin-top:0\}/);
+  assert.match(result.html, /\.wmd-blockquote > p:last-child\{margin-bottom:0\}/);
+});
+
+test("multi-paragraph blockquotes keep separate paragraphs", () => {
+  const result = compile(`@tab Home
+> First paragraph
+>
+> Second paragraph`);
+
+  assert.match(
+    result.html,
+    /<blockquote class="wmd-blockquote">\s*<p>First paragraph<\/p>\s*<p>Second paragraph<\/p>\s*<\/blockquote>/
+  );
+});
