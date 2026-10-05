@@ -164,15 +164,17 @@ Use `<<...>>` when referring to a word or phrase as an object of discussion:
 Use an <<en-dash>> to mark the interruption.
 ```
 
-Use `<<<` and `>>>` on their own lines for a prose passage. Normal WMD formatting still works inside:
+Use `[[[` and `]]]` on their own lines for a prose passage. Normal WMD formatting still works inside:
 
 ```wmd
-<<<
+[[[
 The bottles had been smashed against the sandstone wall.
 
 This line can still contain *bold text* or <<a mentioned phrase>>.
->>>
+]]]
 ```
+
+The older `<<<` / `>>>` prose fences are still accepted for compatibility, but bracket fences are preferred because `>` already has blockquote meaning in Markdown.
 
 ## VS Code extension
 
