@@ -276,3 +276,37 @@ A prose paragraph.
   assert.match(result.css, /\.wmd-mention\{/);
   assert.match(result.css, /\.wmd-prose-block\{/);
 });
+
+
+test("multiline style presets work in compiled documents", () => {
+  const result = compile(`@config
+Large: {
+  wmd-formatting: @style;
+  size: 1.5em;
+};
+@endconfig
+
+@tab Home
+@style Large
+Preface text.
+@end`);
+
+  assert.match(result.html, /data-wmd-preset="large"/);
+  assert.match(result.html, /\[data-wmd-preset="large"\]\{[^}]*font-size:1\.5em/);
+});
+
+test("multiline style presets work in fragment rendering", () => {
+  const result = renderFragment(`@config
+Large: {
+  wmd-formatting: @style;
+  size: 1.5em;
+};
+@endconfig
+
+@style Large
+Preface text.
+@end`);
+
+  assert.match(result.html, /data-wmd-preset="large"/);
+  assert.match(result.css, /\[data-wmd-preset="large"\]\{[^}]*font-size:1\.5em/);
+});
