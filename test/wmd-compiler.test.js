@@ -235,6 +235,35 @@ After`);
   assert.match(result.html, /\.wmd-prose-block\{font-family:/);
 });
 
+test("bracket prose fences render without colliding with wiki links", () => {
+  const result = compile(`@tab Home
+[[[
+The Quick Brown Fox Jumps
+
+Over The
+]]]
+
+[[Home|Back home]]`);
+
+  assert.match(result.html, /<div class="wmd-prose-block">/);
+  assert.match(result.html, /<p>The Quick Brown Fox Jumps<\/p>/);
+  assert.match(result.html, /<p>Over The<\/p>/);
+  assert.match(result.html, /href="#home">Back home<\/a>/);
+  assert.doesNotMatch(result.html, /<blockquote/);
+});
+
+test("legacy arrow prose fences are parsed before blockquotes", () => {
+  const result = compile(`@tab Home
+<<<
+The Quick Brown Fox Jumps
+
+Over The
+>>>`);
+
+  assert.match(result.html, /<div class="wmd-prose-block">/);
+  assert.doesNotMatch(result.html, /<blockquote/);
+});
+
 test("fragment rendering returns mention and prose-block styles", () => {
   const result = renderFragment(`A <<term>>.
 
