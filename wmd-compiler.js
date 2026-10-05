@@ -52,6 +52,92 @@ function stripBom(text) {
   return String(text || "").replace(/^\uFEFF/, "");
 }
 
+function getFenceStart(line) {
+  const match = String(line || "").match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+  if (!match) return null;
+
+  return {
+    marker: match[1][0],
+    length: match[1].length,
+  };
+}
+
+function isFenceEnd(line, fence) {
+  if (!fence) return false;
+  const marker = escapeRegExp(fence.marker);
+  return new RegExp(`^ {0,3}${marker}{${fence.length},}\\s*#!/usr/bin/env node
+const fs = require("fs");
+const http = require("http");
+const path = require("path");
+const MarkdownIt = require("markdown-it");
+
+const DEFAULT_PORT = 4312;
+const WATCH_DEBOUNCE_MS = 120;
+
+function defaultOutputPath(inputPath) {
+  const parsed = path.parse(inputPath);
+  return path.join(parsed.dir, `${parsed.name}.html`);
+}
+
+function slugify(text) {
+  return String(text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function niceLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function cleanHeadingText(text) {
+  return String(text || "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, "$2")
+    .replace(/<<([^>]+)>>/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_`#=]/g, "")
+    .trim();
+}
+
+).test(String(line || ""));
+}
+
+function transformOutsideFencedCode(markdown, transformLine) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  let fence = null;
+
+  return lines.map((line, index) => {
+    if (fence) {
+      if (isFenceEnd(line, fence)) fence = null;
+      return line;
+    }
+
+    const openingFence = getFenceStart(line);
+    if (openingFence) {
+      fence = openingFence;
+      return line;
+    }
+
+    return transformLine(line, index);
+  }).join("\n");
+}
+
 function parseTarget(target) {
   const raw = String(target || "").trim();
   const hashIndex = raw.indexOf("#");
@@ -798,9 +884,31 @@ function parseWmd(source) {
   const tabs = [];
   let currentTab = null;
   let inConfig = false;
+  let fence = null;
   const configState = { pendingStyle: "" };
 
+  function ensureCurrentTab() {
+    if (currentTab) return;
+    currentTab = createTab("Main", false);
+    tabs.push(currentTab);
+  }
+
   for (const line of lines) {
+    if (fence) {
+      ensureCurrentTab();
+      currentTab.content.push(line);
+      if (isFenceEnd(line, fence)) fence = null;
+      continue;
+    }
+
+    const openingFence = getFenceStart(line);
+    if (openingFence) {
+      ensureCurrentTab();
+      currentTab.content.push(line);
+      fence = openingFence;
+      continue;
+    }
+
     if (line.trim() === "@config") {
       inConfig = true;
       continue;
@@ -829,9 +937,7 @@ function parseWmd(source) {
 
     if (!currentTab) {
       if (line.trim() === "") continue;
-
-      currentTab = createTab("Main", false);
-      tabs.push(currentTab);
+      ensureCurrentTab();
     }
 
     if (line.startsWith("@title ")) {
@@ -979,8 +1085,20 @@ function prepareStyleMarkers(markdown, stylePresets = {}) {
   const markers = new Map();
   const customPresets = customMarkerPresets(stylePresets);
   let currentStyle = "";
+  let fence = null;
 
   const prepared = lines.map((line, index) => {
+    if (fence) {
+      if (isFenceEnd(line, fence)) fence = null;
+      return line;
+    }
+
+    const openingFence = getFenceStart(line);
+    if (openingFence) {
+      fence = openingFence;
+      return line;
+    }
+
     const start = line.trim().match(/^@style\s+(.+?)\s*$/i);
     if (start) {
       currentStyle = normalizeStyleName(start[1]);
@@ -1078,8 +1196,22 @@ function getTargetMarkdown(targetRaw, tabsBySlug, warnings, sourceTabName) {
 function resolveIncludes(markdown, tabsBySlug, warnings, sourceTabName, stack = []) {
   const lines = markdown.split(/\r?\n/);
   const out = [];
+  let fence = null;
 
   for (const line of lines) {
+    if (fence) {
+      out.push(line);
+      if (isFenceEnd(line, fence)) fence = null;
+      continue;
+    }
+
+    const openingFence = getFenceStart(line);
+    if (openingFence) {
+      out.push(line);
+      fence = openingFence;
+      continue;
+    }
+
     const match = line.trim().match(/^@(include|embed)\s+(.+)$/);
 
     if (!match) {
@@ -1111,14 +1243,14 @@ function resolveIncludes(markdown, tabsBySlug, warnings, sourceTabName, stack = 
 }
 
 function applyVars(markdown, vars, warnings, sourceTabName) {
-  return markdown.replace(/\{\{([A-Za-z][\w-]*)\}\}/g, (match, name) => {
+  return transformOutsideFencedCode(markdown, (line) => line.replace(/\{\{([A-Za-z][\w-]*)\}\}/g, (match, name) => {
     if (Object.prototype.hasOwnProperty.call(vars, name)) {
       return vars[name];
     }
 
     warnings.push(`Unknown variable in ${sourceTabName}: {{${name}}}`);
     return match;
-  });
+  }));
 }
 
 function uniqueWarnings(warnings) {
@@ -1193,9 +1325,23 @@ function parseFragmentSource(source) {
   const body = [];
   const warnings = [];
   let inConfig = false;
+  let fence = null;
   const configState = { pendingStyle: "" };
 
   for (const line of lines) {
+    if (fence) {
+      body.push(line);
+      if (isFenceEnd(line, fence)) fence = null;
+      continue;
+    }
+
+    const openingFence = getFenceStart(line);
+    if (openingFence) {
+      body.push(line);
+      fence = openingFence;
+      continue;
+    }
+
     if (line.trim() === "@config") {
       inConfig = true;
       continue;

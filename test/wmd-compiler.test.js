@@ -63,6 +63,82 @@ test("fenced code headings are not added to navigation", () => {
   assert.doesNotMatch(result.html, /data-heading-id="main-fake-heading"/);
 });
 
+test("fenced code keeps WMD directives literal and does not create tabs", () => {
+  const source = `@var example = replaced
+@tab Home
+# Real content
+
+\`\`\`wmd
+@tab Fake
+@title Fake title
+@hidden
+@var example = changed
+@include Missing
+@style Large
+[[Home]]
+{{example}}
+!warning Still code
+!end
+\`\`\`
+
+After the code.
+
+@tab Real
+# Second real tab
+`;
+
+  const result = compile(source);
+
+  assert.match(result.html, /<code class="language-wmd">[\s\S]*@tab Fake[\s\S]*@title Fake title[\s\S]*@include Missing[\s\S]*\[\[Home\]\][\s\S]*\{\{example\}\}[\s\S]*!warning Still code/);
+  assert.doesNotMatch(result.html, /<section id="fake"/);
+  assert.doesNotMatch(result.html, /data-tab-name="Fake"/);
+  assert.doesNotMatch(result.html, /Broken include in Home: tab does not exist: Missing/);
+  assert.match(result.html, /<section id="real"/);
+});
+
+test("fenced code info strings become language classes", () => {
+  const result = compile(`@tab Home
+
+\`\`\`language-name
+<thing>{{not-a-variable}}</thing>
+\`\`\`
+`);
+
+  assert.match(result.html, /<code class="language-language-name">/);
+  assert.match(result.html, /&lt;thing&gt;\{\{not-a-variable\}\}&lt;\/thing&gt;/);
+  assert.doesNotMatch(result.warnings.join("\n"), /Unknown variable/);
+});
+
+test("fragment rendering leaves WMD directives inside fenced code untouched", () => {
+  const result = renderFragment(`\`\`wmd
+@tab Fake
+@title Fake
+@hidden
+@config
+font: serif
+@endconfig
+\`\`\`
+`);
+
+  assert.match(result.html, /<code class="language-wmd">[\s\S]*@tab Fake[\s\S]*@title Fake[\s\S]*@config[\s\S]*font: serif/);
+  assert.equal(result.warnings.length, 0);
+});
+
+test("tilde fenced code is also opaque to WMD preprocessing", () => {
+  const result = compile(`@var name = Alice
+@tab Home
+
+~~~wmd
+@include Missing
+{{name}}
+@style Large
+~~~
+`);
+
+  assert.match(result.html, /<code class="language-wmd">[\s\S]*@include Missing[\s\S]*\{\{name\}\}[\s\S]*@style Large/);
+  assert.doesNotMatch(result.warnings.join("\n"), /Broken include|Unknown variable/);
+});
+
 test("duplicate tab names are warned about and get unique section ids", () => {
   const source = `@tab Combat
 # One
