@@ -682,8 +682,8 @@ function stylePresetCss(stylePresets) {
   const baseCss = [
     ".wmd-blockquote > p:first-child{margin-top:0}",
     ".wmd-blockquote > p:last-child{margin-bottom:0}",
-    ".wmd-mention{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",Georgia,serif;font-size:1.04em;line-height:1.45;background:rgba(127,127,127,.09);background:color-mix(in srgb,currentColor 7%,transparent);padding:.04em .22em;border-radius:.18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}",
-    ".wmd-prose-block{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",Georgia,serif;font-size:1.075em;line-height:1.75;margin:1.5em 0;padding:.15em 0 .15em 1.15em;border-left:2px solid rgba(127,127,127,.28);border-left-color:color-mix(in srgb,currentColor 22%,transparent)}",
+    ".wmd-mention{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.04em;line-height:1.45;background:rgba(127,127,127,.09);background:color-mix(in srgb,currentColor 7%,transparent);padding:.04em .22em;border-radius:.18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}",
+    ".wmd-prose-block{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.075em;line-height:1.75;margin:1.5em 0;padding:.15em 0 .15em 1.15em;border-left:2px solid rgba(127,127,127,.28);border-left-color:color-mix(in srgb,currentColor 22%,transparent)}",
     ".wmd-prose-block > :first-child{margin-top:0}",
     ".wmd-prose-block > :last-child{margin-bottom:0}",
   ].join("\n  ");
