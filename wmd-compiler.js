@@ -597,7 +597,12 @@ function nativeStyleSelectors(preset) {
 }
 
 function stylePresetCss(stylePresets) {
-  return Object.values(stylePresets || {}).map((preset) => {
+  const baseCss = [
+    ".wmd-blockquote > p:first-child{margin-top:0}",
+    ".wmd-blockquote > p:last-child{margin-bottom:0}",
+  ].join("\n  ");
+
+  const presetCss = Object.values(stylePresets || {}).map((preset) => {
     const declarations = [
       `font-weight:${preset.bold ? "700" : "400"}`,
       `font-style:${preset.italic ? "italic" : "normal"}`,
@@ -621,6 +626,8 @@ function stylePresetCss(stylePresets) {
     }
     return blocks.join("\n  ");
   }).join("\n  ");
+
+  return [baseCss, presetCss].filter(Boolean).join("\n  ");
 }
 
 function cssString(value) {
@@ -1025,6 +1032,11 @@ function makeMarkdownIt(options = {}) {
     linkify: true,
     typographer: true,
   });
+
+  md.renderer.rules.blockquote_open = (tokens, idx, rendererOptions, env, self) => {
+    tokens[idx].attrJoin("class", "wmd-blockquote");
+    return self.renderToken(tokens, idx, rendererOptions);
+  };
 
   md.disable("emphasis");
   md.enable("strikethrough");
