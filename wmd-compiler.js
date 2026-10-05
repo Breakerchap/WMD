@@ -239,7 +239,7 @@ function prosePlugin(md) {
     state.push("wmd_prose_block_close", "div", -1);
     state.line = nextLine + 1;
     return true;
-  });
+  }, { alt: ["paragraph", "reference", "blockquote", "list"] });
 
   md.renderer.rules.wmd_mention_open = (tokens, idx, options, env, self) =>
     self.renderToken(tokens, idx, options);
@@ -453,7 +453,7 @@ function calloutPlugin(md) {
     state.push("wmd_callout_close", "div", -1);
     state.line = nextLine + 1;
     return true;
-  });
+  }, { alt: ["paragraph", "reference", "blockquote", "list"] });
 
   md.renderer.rules.wmd_callout_open = (tokens, idx) => {
     const token = tokens[idx];
@@ -511,7 +511,7 @@ function collapsePlugin(md) {
     state.push("wmd_collapse_close", "details", -1);
     state.line = nextLine + 1;
     return true;
-  });
+  }, { alt: ["paragraph", "reference", "blockquote", "list"] });
 
   md.renderer.rules.wmd_collapse_open = (tokens, idx) => {
     const title = tokens[idx].meta && tokens[idx].meta.title

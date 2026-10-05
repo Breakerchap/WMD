@@ -139,6 +139,59 @@ test("tilde fenced code is also opaque to WMD preprocessing", () => {
   assert.doesNotMatch(result.warnings.join("\n"), /Broken include|Unknown variable/);
 });
 
+test("prose blocks interrupt a preceding paragraph without a blank line", () => {
+  const result = compile(`@tab Home
+Text immediately before the prose block.
+[[[
+This is prose.
+]]]`);
+
+  assert.match(result.html, /<p>Text immediately before the prose block.</p>/);
+  assert.match(result.html, /<div class="wmd-prose-block">/);
+  assert.match(result.html, /<p>This is prose.</p>/);
+  assert.doesNotMatch(result.html, /<p>[sS]*[[[/);
+});
+
+test("callouts interrupt a preceding paragraph without a blank line", () => {
+  const result = compile(`@tab Home
+Text immediately before the callout.
+!note Important
+This is something worth pointing out.
+!end`);
+
+  assert.match(result.html, /<p>Text immediately before the callout.</p>/);
+  assert.match(result.html, /<div class="callout callout-note">/);
+  assert.match(result.html, /<div class="callout-title">Important</div>/);
+});
+
+test("collapsible sections interrupt a preceding paragraph without a blank line", () => {
+  const result = compile(`@tab Home
+Text immediately before the collapse.
+@collapse More
+Hidden content.
+@endcollapse`);
+
+  assert.match(result.html, /<p>Text immediately before the collapse.</p>/);
+  assert.match(result.html, /<details class="collapse">/);
+  assert.match(result.html, /<summary>More</summary>/);
+});
+
+test("prose blocks render inside collapsible sections without a blank line", () => {
+  const result = compile(`@tab Home
+@collapse Prose
+Block prose is useful.
+[[[
+I met a traveller from an antique land
+Who said two vast and trunkless legs of stone
+Stand in the desert.
+]]]
+@endcollapse`);
+
+  assert.match(result.html, /<details class="collapse">[sS]*<div class="wmd-prose-block">/);
+  assert.match(result.html, /I met a traveller from an antique land/);
+  assert.doesNotMatch(result.html, />[[[</);
+});
+
 test("duplicate tab names are warned about and get unique section ids", () => {
   const source = `@tab Combat
 # One
