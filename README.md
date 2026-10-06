@@ -2,6 +2,8 @@
 
 WMD is a small Markdown-derived document format that compiles `.wmd` files into self-contained interactive HTML.
 
+Read about its features here: [remyellis.au/notes/wmd](https://remyellis.au/notes/wmd)
+
 This repository intentionally contains only two user-facing pieces:
 
 - the **WMD compiler** (`wmd-compiler.js`)
