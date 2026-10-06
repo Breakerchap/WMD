@@ -99,10 +99,10 @@ This is a callout.
 More text.
 ```
 
-Use `<<...>>` when referring to a word or phrase as an object of discussion:
+`<<...>>` and `<<<...>>>` both mark inline prose. Double angle brackets use the pill-style background, while triple angle brackets use the same prose typography without the pill:
 
 ```wmd
-Use an <<en-dash>> to mark the interruption.
+Use an <<en-dash>> for a pill, or <<<en-dash>>> for plain inline prose.
 ```
 
 Use `[[[` and `]]]` on their own lines for a prose passage. Normal WMD formatting still works inside:
@@ -114,8 +114,6 @@ The bottles had been smashed against the sandstone wall.
 This line can still contain *bold text* or <<a mentioned phrase>>.
 ]]]
 ```
-
-The older `<<<` / `>>>` prose fences are still accepted for compatibility, but bracket fences are preferred because `>` already has blockquote meaning in Markdown.
 
 ## VS Code extension
 

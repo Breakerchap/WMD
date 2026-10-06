@@ -42,8 +42,8 @@ function cleanHeadingText(text) {
   return String(text || "")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, "$2")
+    .replace(/<<<([^<>\n]+)>>>(?!>)/g, "$1")
     .replace(/<<([^>]+)>>/g, "$1")
-    .replace(/<([^<>\n]+)>/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/[*_`#=]/g, "")
     .trim();
@@ -173,51 +173,33 @@ function prosePlugin(md) {
   md.inline.ruler.before("link", "wmd_inline_prose", (state, silent) => {
     const start = state.pos;
 
-    if (state.src[start] !== "<" || state.src.slice(start, start + 2) === "<<") {
+    if (state.src.slice(start, start + 3) !== "<<<" || state.src.slice(start, start + 4) === "<<<<") {
       return false;
     }
 
-    let end = start + 1;
-    while (end < state.src.length) {
+    let end = start + 3;
+    while (end < state.src.length - 2) {
       if (state.src[end] === "\\" && end + 1 < state.src.length) {
         end += 2;
         continue;
       }
-      if (state.src[end] === ">") break;
+      if (state.src.slice(end, end + 3) === ">>>") break;
       if (state.src[end] === "\n") return false;
       end++;
     }
 
-    if (end >= state.src.length || end === start + 1) return false;
-
-    const content = state.src.slice(start + 1, end);
-
-    // Keep Markdown autolinks and ordinary HTML tags working in fragment mode.
-    if (/^(?:https?:\/\/|mailto:)/i.test(content) || /^[^\s<>@]+@[^\s<>@]+$/.test(content)) {
-      return false;
-    }
-
-    const htmlTag = content.match(/^\/?([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?\/?$/);
-    const htmlTags = new Set([
-      "a", "abbr", "article", "aside", "b", "blockquote", "br", "button", "code",
-      "del", "details", "div", "em", "figcaption", "figure", "footer", "h1", "h2",
-      "h3", "h4", "h5", "h6", "header", "hr", "i", "img", "kbd", "li", "main",
-      "mark", "nav", "ol", "p", "pre", "section", "small", "span", "strong",
-      "sub", "summary", "sup", "table", "tbody", "td", "th", "thead", "tr", "u", "ul"
-    ]);
-    if (htmlTag && htmlTags.has(htmlTag[1].toLowerCase())) return false;
-    if (/^![A-Z]+\b/i.test(content) || /^!--/.test(content)) return false;
+    if (end >= state.src.length - 2 || end === start + 3) return false;
 
     if (!silent) {
       const open = state.push("wmd_inline_prose_open", "span", 1);
       open.attrs = [["class", "wmd-inline-prose"]];
 
-      state.md.inline.parse(content, state.md, state.env, state.tokens);
+      state.md.inline.parse(state.src.slice(start + 3, end), state.md, state.env, state.tokens);
 
       state.push("wmd_inline_prose_close", "span", -1);
     }
 
-    state.pos = end + 1;
+    state.pos = end + 3;
     return true;
   });
 
@@ -257,8 +239,8 @@ function prosePlugin(md) {
     const start = state.bMarks[startLine] + state.tShift[startLine];
     const max = state.eMarks[startLine];
     const opener = state.src.slice(start, max).trim();
-    const closer = opener === "[[[" ? "]]]" : opener === "<<<" ? ">>>" : "";
-    if (!closer) return false;
+    if (opener !== "[[[") return false;
+    const closer = "]]]";
 
     let nextLine = startLine + 1;
     const contentLines = [];

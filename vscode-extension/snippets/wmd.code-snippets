@@ -163,5 +163,12 @@
       "@end"
     ],
     "description": "Apply a configured style to a block"
+  },
+  "Inline prose": {
+    "prefix": "wmd-prose-inline",
+    "body": [
+      "<<<${1:term or phrase}>>>"
+    ],
+    "description": "Insert unboxed WMD inline prose"
   }
 }

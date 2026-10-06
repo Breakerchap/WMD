@@ -661,65 +661,6 @@
               "include": "#blockquote"
             }
           ]
-        },
-        {
-          "name": "meta.prose.block.legacy.wmd",
-          "begin": "^\\s*(<<<)\\s*$",
-          "beginCaptures": {
-            "1": {
-              "name": "punctuation.definition.prose.begin.wmd"
-            }
-          },
-          "end": "^\\s*(>>>)\\s*$",
-          "endCaptures": {
-            "1": {
-              "name": "punctuation.definition.prose.end.wmd"
-            }
-          },
-          "patterns": [
-            {
-              "include": "#headings"
-            },
-            {
-              "include": "#wiki-links"
-            },
-            {
-              "include": "#standard-links"
-            },
-            {
-              "include": "#variable-references"
-            },
-            {
-              "include": "#inline-code"
-            },
-            {
-              "include": "#inline-prose"
-            },
-            {
-              "include": "#inline-mention"
-            },
-            {
-              "include": "#highlight-red"
-            },
-            {
-              "include": "#highlight-orange"
-            },
-            {
-              "include": "#highlight-yellow"
-            },
-            {
-              "include": "#bold"
-            },
-            {
-              "include": "#italic"
-            },
-            {
-              "include": "#lists"
-            },
-            {
-              "include": "#blockquote"
-            }
-          ]
         }
       ]
     },
@@ -746,7 +687,7 @@
       "patterns": [
         {
           "name": "meta.prose.inline.wmd",
-          "match": "(<)(?!<)([^<>\\n]+?)(>)(?!>)",
+          "match": "(<<<)(?!<)([^<>\\n]+?)(>>>)(?!>)",
           "captures": {
             "1": {
               "name": "punctuation.definition.prose.begin.wmd"
