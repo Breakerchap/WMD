@@ -335,6 +335,26 @@ test("multi-paragraph blockquotes keep separate paragraphs", () => {
 });
 
 
+test("single-angle inline prose renders without the pill background", () => {
+  const result = compile(`@tab Home
+I like <inline prose> here, but <<pill prose>> here.`);
+
+  assert.match(result.html, /<span class="wmd-inline-prose">inline prose<\/span>/);
+  assert.match(result.html, /<span class="wmd-mention">pill prose<\/span>/);
+  assert.match(result.html, /\.wmd-inline-prose\{font-family:/);
+  assert.match(result.html, /\.wmd-mention\{font-family:[^}]*background:/);
+  assert.doesNotMatch(result.css || "", /\.wmd-inline-prose\{[^}]*background:/);
+});
+
+test("single-angle inline prose works in fragment rendering with raw HTML enabled", () => {
+  const result = renderFragment(`Use <inline prose>, <https://example.com>, and <em>real HTML</em>.`);
+
+  assert.match(result.html, /<span class="wmd-inline-prose">inline prose<\/span>/);
+  assert.match(result.html, /href="https:\/\/example\.com"/);
+  assert.match(result.html, /<em>real HTML<\/em>/);
+  assert.match(result.css, /\.wmd-inline-prose\{font-family:/);
+});
+
 test("inline mentions render with prose typography without affecting wiki links", () => {
   const result = compile(`@tab Home
 Use an <<en-dash>> here.

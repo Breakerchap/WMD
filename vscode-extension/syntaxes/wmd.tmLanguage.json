@@ -28,6 +28,9 @@
       "include": "#wiki-links"
     },
     {
+      "include": "#inline-prose"
+    },
+    {
       "include": "#inline-mention"
     },
     {
@@ -631,6 +634,9 @@
               "include": "#inline-code"
             },
             {
+              "include": "#inline-prose"
+            },
+            {
               "include": "#inline-mention"
             },
             {
@@ -687,6 +693,9 @@
               "include": "#inline-code"
             },
             {
+              "include": "#inline-prose"
+            },
+            {
               "include": "#inline-mention"
             },
             {
@@ -728,6 +737,25 @@
             },
             "3": {
               "name": "punctuation.definition.mention.end.wmd"
+            }
+          }
+        }
+      ]
+    },
+    "inline-prose": {
+      "patterns": [
+        {
+          "name": "meta.prose.inline.wmd",
+          "match": "(<)(?!<)([^<>\\n]+?)(>)(?!>)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.prose.begin.wmd"
+            },
+            "2": {
+              "name": "markup.other.prose.wmd"
+            },
+            "3": {
+              "name": "punctuation.definition.prose.end.wmd"
             }
           }
         }

@@ -43,6 +43,7 @@ function cleanHeadingText(text) {
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g, "$2")
     .replace(/<<([^>]+)>>/g, "$1")
+    .replace(/<([^<>\n]+)>/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/[*_`#=]/g, "")
     .trim();
@@ -169,6 +170,57 @@ function wikiLinkPlugin(md) {
 }
 
 function prosePlugin(md) {
+  md.inline.ruler.before("link", "wmd_inline_prose", (state, silent) => {
+    const start = state.pos;
+
+    if (state.src[start] !== "<" || state.src.slice(start, start + 2) === "<<") {
+      return false;
+    }
+
+    let end = start + 1;
+    while (end < state.src.length) {
+      if (state.src[end] === "\\" && end + 1 < state.src.length) {
+        end += 2;
+        continue;
+      }
+      if (state.src[end] === ">") break;
+      if (state.src[end] === "\n") return false;
+      end++;
+    }
+
+    if (end >= state.src.length || end === start + 1) return false;
+
+    const content = state.src.slice(start + 1, end);
+
+    // Keep Markdown autolinks and ordinary HTML tags working in fragment mode.
+    if (/^(?:https?:\/\/|mailto:)/i.test(content) || /^[^\s<>@]+@[^\s<>@]+$/.test(content)) {
+      return false;
+    }
+
+    const htmlTag = content.match(/^\/?([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?\/?$/);
+    const htmlTags = new Set([
+      "a", "abbr", "article", "aside", "b", "blockquote", "br", "button", "code",
+      "del", "details", "div", "em", "figcaption", "figure", "footer", "h1", "h2",
+      "h3", "h4", "h5", "h6", "header", "hr", "i", "img", "kbd", "li", "main",
+      "mark", "nav", "ol", "p", "pre", "section", "small", "span", "strong",
+      "sub", "summary", "sup", "table", "tbody", "td", "th", "thead", "tr", "u", "ul"
+    ]);
+    if (htmlTag && htmlTags.has(htmlTag[1].toLowerCase())) return false;
+    if (/^![A-Z]+\b/i.test(content) || /^!--/.test(content)) return false;
+
+    if (!silent) {
+      const open = state.push("wmd_inline_prose_open", "span", 1);
+      open.attrs = [["class", "wmd-inline-prose"]];
+
+      state.md.inline.parse(content, state.md, state.env, state.tokens);
+
+      state.push("wmd_inline_prose_close", "span", -1);
+    }
+
+    state.pos = end + 1;
+    return true;
+  });
+
   md.inline.ruler.before("link", "wmd_mention", (state, silent) => {
     const start = state.pos;
 
@@ -241,6 +293,9 @@ function prosePlugin(md) {
     return true;
   }, { alt: ["paragraph", "reference", "blockquote", "list"] });
 
+  md.renderer.rules.wmd_inline_prose_open = (tokens, idx, options, env, self) =>
+    self.renderToken(tokens, idx, options);
+  md.renderer.rules.wmd_inline_prose_close = () => "</span>";
   md.renderer.rules.wmd_mention_open = (tokens, idx, options, env, self) =>
     self.renderToken(tokens, idx, options);
   md.renderer.rules.wmd_mention_close = () => "</span>";
@@ -731,6 +786,7 @@ function stylePresetCss(stylePresets) {
   const baseCss = [
     ".wmd-blockquote > p:first-child{margin-top:0}",
     ".wmd-blockquote > p:last-child{margin-bottom:0}",
+    ".wmd-inline-prose{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.04em;line-height:1.45}",
     ".wmd-mention{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.04em;line-height:1.45;background:rgba(127,127,127,.09);background:color-mix(in srgb,currentColor 7%,transparent);padding:.04em .22em;border-radius:.18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}",
     ".wmd-prose-block{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.075em;line-height:1.75;margin:1.5em 0;padding:.15em 0 .15em 1.15em;border-left:2px solid rgba(127,127,127,.28);border-left-color:color-mix(in srgb,currentColor 22%,transparent)}",
     ".wmd-prose-block > :first-child{margin-top:0}",
