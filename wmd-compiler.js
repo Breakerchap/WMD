@@ -766,6 +766,9 @@ function nativeStyleSelectors(preset) {
 
 function stylePresetCss(stylePresets) {
   const baseCss = [
+    ".wmd-tab-stops{max-width:100%;overflow-x:auto;margin:1em 0}",
+    ".wmd-tab-row{display:grid;align-items:start;min-width:max-content;line-height:inherit}",
+    ".wmd-tab-cell{min-width:0;overflow-wrap:break-word;white-space:normal}",
     ".wmd-list > li{margin-top:0;margin-bottom:0}",
     ".wmd-list > li.wmd-list-item-spaced{margin-top:.65em}",
     ".wmd-list > li > p{margin-top:0;margin-bottom:0}",
@@ -1347,6 +1350,131 @@ function markListSpacing(tokens, markdown, insertedBlankLines = new Set()) {
   }
 }
 
+// Position tabbed content at independently configurable ruler stops.
+function parseTabStopPositions(argument) {
+  if (!argument || !argument.trim()) return ["8em", "16em", "24em"];
+  const values = argument.split(",").map(part => part.trim());
+  if (!values.length || values.length > 32) return null;
+  let previous = 0;
+  let unit = "";
+  const stops = [];
+  for (const value of values) {
+    const match = value.match(/^(\d+(?:\.\d+)?)(px|em|rem|ch|pt|cm|mm|in)$/i);
+    if (!match) return null;
+    const number = Number(match[1]);
+    const nextUnit = match[2].toLowerCase();
+    if (!Number.isFinite(number) || number <= previous || number > 10000 || (unit && unit !== nextUnit)) return null;
+    previous = number;
+    unit = nextUnit;
+    stops.push(number + unit);
+  }
+  return stops;
+}
+
+function splitTabStopCells(line) {
+  const cells = [];
+  let cell = "";
+  let codeFence = 0;
+  let index = 0;
+  const tick = String.fromCharCode(96);
+  while (index < line.length) {
+    if (line[index] === tick) {
+      let count = 1;
+      while (line[index + count] === tick) count++;
+      if (!codeFence) codeFence = count;
+      else if (codeFence === count) codeFence = 0;
+      cell += line.slice(index, index + count);
+      index += count;
+      continue;
+    }
+    if (line[index] === "\\") {
+      if (line[index + 1] === "\\") {
+        cell += "\\\\";
+        index += 2;
+        continue;
+      }
+      if (!codeFence && line.slice(index, index + 4) === "\\tab" &&
+          !/[\w-]/.test(line[index + 4] || "")) {
+        cells.push(cell.trim());
+        cell = "";
+        index += 4;
+        continue;
+      }
+    }
+    cell += line[index];
+    index++;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function tabStopGridColumns(stops, tabCount) {
+  const positions = stops.slice();
+  const unit = (positions[0].match(/[a-z]+$/) || ["em"])[0];
+  const interval = unit === "px" ? 128 : unit === "pt" ? 96 : unit === "ch" ? 16 : 8;
+  const numeric = value => Number(value.slice(0, -unit.length));
+  while (positions.length < tabCount && positions.length < 32) {
+    positions.push((numeric(positions[positions.length - 1]) + interval) + unit);
+  }
+  const columns = positions.map((position, index) =>
+    index ? "calc(" + position + " - " + positions[index - 1] + ")" : position);
+  columns.push("minmax(max-content, 1fr)");
+  return columns.join(" ");
+}
+
+function tabStopsPlugin(md) {
+  md.block.ruler.before("paragraph", "wmd_tab_stops", (state, startLine, endLine, silent) => {
+    const directive = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine])
+      .trim().match(/^@tabstops(?:\s+(.+))?$/);
+    if (!directive) return false;
+
+    const positions = parseTabStopPositions(directive[1] || "");
+    if (!positions) {
+      if (!silent && Array.isArray(state.env.warnings)) {
+        state.env.warnings.push("Invalid @tabstops ruler: use strictly increasing positions such as 12em, 24em.");
+      }
+      return false;
+    }
+    const rows = [];
+    let end = startLine + 1;
+    while (end < endLine) {
+      const row = state.src.slice(state.bMarks[end] + state.tShift[end], state.eMarks[end]);
+      if (row.trim() === "@endtabstops") break;
+      rows.push(row);
+      end++;
+    }
+    if (end >= endLine) return false;
+    if (silent) return true;
+
+    const open = state.push("wmd_tab_stops_open", "div", 1);
+    open.block = true;
+    open.attrs = [["class", "wmd-tab-stops"]];
+    open.map = [startLine, end + 1];
+
+    for (const row of rows) {
+      const cells = splitTabStopCells(row);
+      const rowOpen = state.push("wmd_tab_row_open", "div", 1);
+      rowOpen.block = true;
+      rowOpen.attrs = [["class", "wmd-tab-row"],
+        ["style", "grid-template-columns:" + tabStopGridColumns(positions, cells.length - 1)]];
+
+      for (const cell of cells) {
+        const cellOpen = state.push("wmd_tab_cell_open", "span", 1);
+        cellOpen.attrs = [["class", "wmd-tab-cell"]];
+        const inline = state.push("inline", "", 0);
+        inline.content = cell;
+        inline.children = [];
+        state.md.inline.parse(cell, state.md, state.env, inline.children);
+        state.push("wmd_tab_cell_close", "span", -1);
+      }
+      state.push("wmd_tab_row_close", "div", -1).block = true;
+    }
+    state.push("wmd_tab_stops_close", "div", -1).block = true;
+    state.line = end + 1;
+    return true;
+  }, { alt: ["paragraph", "reference", "blockquote", "list"] });
+}
+
 function makeMarkdownIt(options = {}) {
   const md = new MarkdownIt({
     html: options.html === true,
@@ -1364,6 +1492,7 @@ function makeMarkdownIt(options = {}) {
   md.enable("strikethrough");
   if (options.tabs !== false) md.use(wikiLinkPlugin);
   md.use(prosePlugin);
+  md.use(tabStopsPlugin);
   md.use(taskCheckboxPlugin);
   md.use(customBoldPlugin);
   md.use(customItalicPlugin);
