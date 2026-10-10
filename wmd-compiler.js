@@ -766,6 +766,10 @@ function nativeStyleSelectors(preset) {
 
 function stylePresetCss(stylePresets) {
   const baseCss = [
+    ".wmd-list > li{margin-top:0;margin-bottom:0}",
+    ".wmd-list > li.wmd-list-item-spaced{margin-top:.65em}",
+    ".wmd-list > li > p{margin-top:0;margin-bottom:0}",
+    ".wmd-list > li > p + p{margin-top:.65em}",
     ".wmd-blockquote > p:first-child{margin-top:0}",
     ".wmd-blockquote > p:last-child{margin-bottom:0}",
     ".wmd-inline-prose{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.04em;line-height:1.45}",
@@ -1001,7 +1005,7 @@ function createUniqueId(baseId, counts) {
 }
 
 function collectHeadings(md, tab, config) {
-  const prepared = prepareStyleMarkers(tab.resolvedContent, config.stylePresets);
+  const prepared = prepareStyleMarkers(separateListFollowingText(tab.resolvedContent), config.stylePresets);
   const tokens = md.parse(prepared.markdown, {});
   const headings = [];
   const idCounts = new Map();
@@ -1245,6 +1249,69 @@ function uniqueWarnings(warnings) {
   return [...new Set(warnings)];
 }
 
+// Treat unindented prose after a list as a new paragraph, instead of
+// Markdown-it's default lazy continuation of the last list item.
+function separateListFollowingText(markdown) {
+  const lines = String(markdown || "").split(/\r?\n/);
+  const output = [];
+  let listContentIndent = null;
+  let fence = null;
+
+  for (const line of lines) {
+    if (fence) {
+      output.push(line);
+      if (isFenceEnd(line, fence)) fence = null;
+      continue;
+    }
+
+    const indent = (line.match(/^ */) || [""])[0].length;
+    const marker = line.match(/^( *)([-+*]|\d{1,9}[.)])([ \t]+|$)/);
+    const startsListItem = marker && (indent <= 3 || listContentIndent !== null);
+
+    if (!line.trim()) {
+      listContentIndent = null;
+    } else if (startsListItem) {
+      // Preserve nested items; an outdented marker returns to the outer list.
+      if (listContentIndent === null || (indent < listContentIndent && indent <= 3)) {
+        listContentIndent = indent + marker[2].length + Math.max(1, marker[3].length);
+      }
+    } else if (listContentIndent !== null && indent < listContentIndent) {
+      // A single line break is sufficient to terminate the list.
+      output.push("");
+      listContentIndent = null;
+    }
+
+    output.push(line);
+    const openingFence = getFenceStart(line);
+    if (openingFence) fence = openingFence;
+  }
+
+  return output.join("\n");
+}
+
+// Distinguish blank-separated list items from compact items.
+// Markdown-it makes the entire list loose when any gap has a blank line.
+function markListSpacing(tokens, markdown) {
+  const lines = String(markdown || "").split("\n");
+  const stack = [];
+
+  for (const token of tokens) {
+    if (token.type === "bullet_list_open" || token.type === "ordered_list_open") {
+      token.attrJoin("class", "wmd-list");
+      stack.push({ seenItem: false });
+    } else if (token.type === "list_item_open" && stack.length) {
+      const list = stack[stack.length - 1];
+      const sourceLine = token.map && token.map[0];
+      if (list.seenItem && sourceLine > 0 && !lines[sourceLine - 1].trim()) {
+        token.attrJoin("class", "wmd-list-item-spaced");
+      }
+      list.seenItem = true;
+    } else if (token.type === "bullet_list_close" || token.type === "ordered_list_close") {
+      stack.pop();
+    }
+  }
+}
+
 function makeMarkdownIt(options = {}) {
   const md = new MarkdownIt({
     html: options.html === true,
@@ -1403,8 +1470,9 @@ function renderFragment(source, options = {}) {
 }
 
 function renderTab(md, tab, env, config) {
-  const prepared = prepareStyleMarkers(tab.resolvedContent, config.stylePresets);
+  const prepared = prepareStyleMarkers(separateListFollowingText(tab.resolvedContent), config.stylePresets);
   const tokens = md.parse(prepared.markdown, env);
+  markListSpacing(tokens, prepared.markdown);
   applyHeadingIdsToTokens(tokens, tab.headings);
   applyPresetMarkersToTokens(tokens, prepared.markers);
   return md.renderer.render(tokens, md.options, env);

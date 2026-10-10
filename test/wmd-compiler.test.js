@@ -456,3 +456,48 @@ Preface text.
   assert.match(result.html, /data-wmd-preset="large"/);
   assert.match(result.css, /\[data-wmd-preset="large"\]\{[^}]*font-size:1\.5em/);
 });
+
+test("unindented prose following a list starts a separate paragraph", () => {
+  const variants = [
+    "THEQUCIKBROWN\n- FOX\n- JUMPS\nOVER THE",
+    "THEQUCIKBROWN\n\n- FOX\n- JUMPS\n\nOVER THE",
+    "THEQUCIKBROWN\n- FOX\n- JUMPS\n\nOVER THE",
+    "THEQUCIKBROWN\n\n- FOX\n- JUMPS\nOVER THE",
+  ];
+
+  for (const source of variants) {
+    for (const { html } of [renderFragment(source), compile("@tab Home\n" + source)]) {
+      const listEnd = html.indexOf("</ul>");
+      assert.ok(listEnd !== -1, "Expected an unordered list");
+      assert.match(html.slice(0, listEnd), /FOX[\s\S]*JUMPS/);
+      assert.doesNotMatch(html.slice(0, listEnd), /OVER THE/);
+      assert.match(html.slice(listEnd), /^<\/ul>\s*<p>OVER THE<\/p>/);
+    }
+  }
+});
+
+test("blank lines between list items add spacing without spacing tight items", () => {
+  const tight = renderFragment("- FOX\n- JUMPS");
+  const spaced = renderFragment("- FOX\n\n- JUMPS");
+  const mixed = renderFragment("- ONE\n- TWO\n\n- THREE\n- FOUR");
+
+  assert.match(tight.html, /<ul class="wmd-list">/);
+  assert.doesNotMatch(tight.html, /wmd-list-item-spaced/);
+  assert.match(spaced.html, /<li class="wmd-list-item-spaced">/);
+  assert.equal((mixed.html.match(/class="wmd-list-item-spaced"/g) || []).length, 1);
+  assert.match(mixed.html, /<li class="wmd-list-item-spaced">\s*<p>THREE<\/p>/);
+  assert.match(spaced.css, /\.wmd-list > li\.wmd-list-item-spaced\{margin-top:\.65em\}/);
+  assert.match(spaced.css, /\.wmd-list > li > p\{margin-top:0;margin-bottom:0\}/);
+});
+
+test("indented list continuations and code fences retain their content", () => {
+  const continuation = renderFragment("- FOX\n  JUMPS OVER THE\nAFTER");
+  const listEnd = continuation.html.indexOf("</ul>");
+  assert.match(continuation.html.slice(0, listEnd), /JUMPS OVER THE/);
+  assert.doesNotMatch(continuation.html.slice(0, listEnd), /AFTER/);
+  assert.match(continuation.html.slice(listEnd), /^<\/ul>\s*<p>AFTER<\/p>/);
+
+  const fence = String.fromCharCode(96).repeat(3);
+  const code = renderFragment([fence + "wmd", "- FOX", "OVER THE", fence].join("\n"));
+  assert.match(code.html, /<code class="language-wmd">- FOX\nOVER THE\n<\/code>/);
+});

@@ -115,6 +115,26 @@ This line can still contain *bold text* or <<a mentioned phrase>>.
 ]]]
 ```
 
+### Lists and line breaks
+
+Consecutive list items stay close together; a blank line between items creates extra vertical spacing:
+
+```wmd
+- First item
+- Second item
+
+- Third item
+```
+
+Text following a list at the same indentation starts a new paragraph even if there is only one line break. To continue the last list item, indent the continuation text:
+
+```wmd
+- First item
+- Second item
+  This is still part of the second item.
+Outside the list.
+```
+
 ## VS Code extension
 
 The extension lives in `vscode-extension/`. It provides:
