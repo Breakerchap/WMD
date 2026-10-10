@@ -1464,7 +1464,6 @@ function tabStopsPlugin(md) {
         const inline = state.push("inline", "", 0);
         inline.content = cell;
         inline.children = [];
-        state.md.inline.parse(cell, state.md, state.env, inline.children);
         state.push("wmd_tab_cell_close", "span", -1);
       }
       state.push("wmd_tab_row_close", "div", -1).block = true;
