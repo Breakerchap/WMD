@@ -536,3 +536,69 @@ test("numbered lists use compact transitions and honour blank lines", () => {
   const spaced = renderFragment("1. First\n\n2. Second").html;
   assert.match(spaced, /<li class="wmd-list-item-spaced">/);
 });
+
+test("configurable tab stops align independently in documents and fragments", () => {
+  const source = "@tabstops 12em, 29em\nAlgorithmica \\tab $P=NP$\nHeuristica \\tab $P\\ne NP$ \\tab _average-case_\n@endtabstops";
+  for (const { html } of [renderFragment(source), compile("@tab Main\n" + source)]) {
+    assert.match(html, /<div class="wmd-tab-stops">/);
+    assert.match(html, /grid-template-columns:12em calc\(29em - 12em\) minmax\(max-content, 1fr\)/);
+    assert.match(html, /<span class="wmd-tab-cell">Algorithmica<\/span>/);
+    assert.match(html, /<span class="wmd-tab-cell">Heuristica<\/span>/);
+    assert.match(html, /<em>average-case<\/em>/);
+    assert.doesNotMatch(html, /@tabstops|@endtabstops/);
+  }
+});
+
+test("tab stops preserve WMD formatting, code spans, links, and maths", () => {
+  const tick = String.fromCharCode(96);
+  const source = "@tabstops 10rem, 21rem\n*Name* \\tab $P\\ne NP$ \\tab [paper](https://example.com)\n" +
+    tick + "\\tab" + tick + " \\tab <<prose>>\n@endtabstops";
+  const result = renderFragment(source);
+  assert.match(result.html, /<strong>Name<\/strong>/);
+  assert.match(result.html, /\$P\\ne NP\$/);
+  assert.match(result.html, /href="https:\/\/example.com"/);
+  assert.match(result.html, /<code>\\tab<\/code>/);
+  assert.match(result.html, /class="wmd-mention">prose<\/span>/);
+  assert.equal((result.html.match(/class="wmd-tab-row"/g) || []).length, 2);
+  assert.match(result.css, /\.wmd-tab-row\{display:grid/);
+});
+
+test("tab stops use defaults and extend past the last custom position", () => {
+  const defaults = renderFragment("@tabstops\nA \\tab B \\tab C\n@endtabstops");
+  assert.match(defaults.html, /grid-template-columns:8em calc\(16em - 8em\) calc\(24em - 16em\)/);
+  const extended = renderFragment("@tabstops 11em\nA \\tab B \\tab C\n@endtabstops");
+  assert.match(extended.html, /grid-template-columns:11em calc\(19em - 11em\)/);
+});
+
+test("tab-stop CSS values are validated", () => {
+  for (const ruler of ["10em, 9em", "10em, calc(20em)", "10em; background:red", "12em, 20px", "0em"]) {
+    const result = renderFragment("@tabstops " + ruler + "\nA \\tab B\n@endtabstops");
+    assert.doesNotMatch(result.html, /class="wmd-tab-stops"/);
+    assert.ok(result.warnings.some(warning => warning.includes("Invalid @tabstops ruler")));
+  }
+});
+
+test("tab-stop markers in code and escaped markers do not split columns", () => {
+  const tick = String.fromCharCode(96);
+  const source = "@tabstops 9em\n" + tick + "\\tab" + tick + " \\tab B\n" +
+    "Escaped \\\\tab \\tab C\n@endtabstops";
+  const result = renderFragment(source);
+  assert.match(result.html, /<code>\\tab<\/code>/);
+  assert.match(result.html, /Escaped/);
+  assert.equal((result.html.match(/class="wmd-tab-row"/g) || []).length, 2);
+});
+
+test("tab stops in fenced code remain literal", () => {
+  const fence = String.fromCharCode(96).repeat(3);
+  const result = renderFragment([fence + "wmd", "@tabstops 10em", "A \\tab B", "@endtabstops", fence].join("\n"));
+  assert.doesNotMatch(result.html, /class="wmd-tab-stops"/);
+  assert.match(result.html, /@tabstops 10em/);
+});
+
+test("tab-stop blocks interrupt adjoining paragraphs without blank lines", () => {
+  const source = "Before\n@tabstops 11em\nA \\tab B\n@endtabstops\nAfter";
+  const result = renderFragment(source);
+  assert.match(result.html, /<p>Before<\/p>/);
+  assert.match(result.html, /<div class="wmd-tab-stops">/);
+  assert.match(result.html, /<\/div>\s*<p>After<\/p>/);
+});
