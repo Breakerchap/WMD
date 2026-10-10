@@ -135,6 +135,35 @@ Text immediately before or after a list stays close to the list when separated b
 Outside the list.
 ```
 
+### Google Docs-style tab stops
+
+Tab stops are positions measured from the left edge of a layout block, not
+monospace spaces. Define a ruler with `@tabstops` and separate aligned content
+using `\tab`:
+
+```wmd
+@tabstops 12em, 28em
+Algorithmica \tab $P=NP$
+Heuristica \tab $P\ne NP$
+Pessiland \tab No public-key cryptography
+@endtabstops
+```
+
+Each stop is independent: `12em, 28em` aligns the second tab at 28em
+from the left, not 12 + 28 = 40em. Set as many positions as needed:
+`@tabstops 10em, 18em, 35em`. Leave positions out for 8em, 16em, 24em.
+After the last configured position, additional tabs use default intervals.
+
+Positions must be positive, strictly increasing, and in the same CSS unit.
+Supported: `px`, `em`, `rem`, `ch`, `pt`, `cm`, `mm`, `in`.
+Inline WMD (links, prose, bold, italics, code and maths) works inside each
+column. Lines share the same stops even with proportional fonts.
+Wide blocks scroll horizontally on small screens. Text longer than a
+column may wrap; unlike a full word processor, it does not automatically
+skip ahead to a later stop.
+
+Use `\\tab` to write the marker literally, or put it in inline code.
+
 ## VS Code extension
 
 The extension lives in `vscode-extension/`. It provides:

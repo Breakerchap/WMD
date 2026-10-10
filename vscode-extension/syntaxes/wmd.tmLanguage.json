@@ -13,6 +13,9 @@
       "include": "#wmd-prose-blocks"
     },
     {
+      "include": "#wmd-tab-stops"
+    },
+    {
       "include": "#wmd-callout-blocks"
     },
     {
@@ -699,6 +702,67 @@
               "name": "punctuation.definition.prose.end.wmd"
             }
           }
+        }
+      ]
+    },
+    "wmd-tab-stops": {
+      "patterns": [
+        {
+          "name": "meta.tabstops.wmd",
+          "begin": "^\\s*(@tabstops)(?:\\s+([^\\n]+))?\\s*$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.tabstops.begin.wmd"
+            },
+            "2": {
+              "name": "constant.numeric.tabstop-positions.wmd"
+            }
+          },
+          "end": "^\\s*(@endtabstops)\\s*$",
+          "endCaptures": {
+            "1": {
+              "name": "keyword.control.directive.tabstops.end.wmd"
+            }
+          },
+          "patterns": [
+            {
+              "name": "keyword.operator.tabstop.wmd",
+              "match": "(?<!\\\\)\\\\tab\\b"
+            },
+            {
+              "include": "#inline-code"
+            },
+            {
+              "include": "#wiki-links"
+            },
+            {
+              "include": "#standard-links"
+            },
+            {
+              "include": "#inline-prose"
+            },
+            {
+              "include": "#inline-mention"
+            },
+            {
+              "include": "#variable-references"
+            },
+            {
+              "include": "#bold"
+            },
+            {
+              "include": "#italic"
+            },
+            {
+              "include": "#highlight-yellow"
+            },
+            {
+              "include": "#highlight-orange"
+            },
+            {
+              "include": "#highlight-red"
+            }
+          ]
         }
       ]
     }

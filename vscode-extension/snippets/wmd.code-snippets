@@ -170,5 +170,15 @@
       "<<<${1:term or phrase}>>>"
     ],
     "description": "Insert unboxed WMD inline prose"
+  },
+  "Tab Stops": {
+    "prefix": "@tabstops",
+    "body": [
+      "@tabstops ${1:12em}, ${2:24em}",
+      "${3:Label} \\tab ${4:Aligned text}",
+      "$0",
+      "@endtabstops"
+    ],
+    "description": "Create independently positioned ruler tab stops for aligned WMD content"
   }
 }

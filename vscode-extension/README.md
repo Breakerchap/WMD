@@ -9,7 +9,7 @@ Language support for `.wmd` files.
 - smart pairing for `*`, `_`, `=`, and backticks
 - bracket, quote, backtick, and wiki-link auto-closing
 - document formatting
-- folding for config, callout, collapse, and style blocks
+- folding for config, callout, collapse, style, and tab-stop blocks
 - WMD Dark and WMD Light colour themes
 - live preview in VS Code's Simple Browser
 
