@@ -770,6 +770,11 @@ function stylePresetCss(stylePresets) {
     ".wmd-list > li.wmd-list-item-spaced{margin-top:.65em}",
     ".wmd-list > li > p{margin-top:0;margin-bottom:0}",
     ".wmd-list > li > p + p{margin-top:.65em}",
+    "ul.wmd-list,ol.wmd-list{line-height:1.35}",
+    "p.wmd-list-before{margin-bottom:0}",
+    "ul.wmd-list.wmd-list-joined-before,ol.wmd-list.wmd-list-joined-before{margin-top:0}",
+    "ul.wmd-list.wmd-list-joined-after,ol.wmd-list.wmd-list-joined-after{margin-bottom:0}",
+    "p.wmd-list-after{margin-top:0}",
     ".wmd-blockquote > p:first-child{margin-top:0}",
     ".wmd-blockquote > p:last-child{margin-bottom:0}",
     ".wmd-inline-prose{font-family:\"Century Schoolbook\",\"Century Schoolbook L\",serif;font-size:1.04em;line-height:1.45}",
@@ -1256,6 +1261,7 @@ function separateListFollowingText(markdown) {
   const output = [];
   let listContentIndent = null;
   let fence = null;
+  const insertedBlankLines = arguments[1];
 
   for (const line of lines) {
     if (fence) {
@@ -1277,6 +1283,7 @@ function separateListFollowingText(markdown) {
       }
     } else if (listContentIndent !== null && indent < listContentIndent) {
       // A single line break is sufficient to terminate the list.
+      if (insertedBlankLines) insertedBlankLines.add(output.length);
       output.push("");
       listContentIndent = null;
     }
@@ -1291,7 +1298,7 @@ function separateListFollowingText(markdown) {
 
 // Distinguish blank-separated list items from compact items.
 // Markdown-it makes the entire list loose when any gap has a blank line.
-function markListSpacing(tokens, markdown) {
+function markListSpacing(tokens, markdown, insertedBlankLines = new Set()) {
   const lines = String(markdown || "").split("\n");
   const stack = [];
 
@@ -1308,6 +1315,34 @@ function markListSpacing(tokens, markdown) {
       list.seenItem = true;
     } else if (token.type === "bullet_list_close" || token.type === "ordered_list_close") {
       stack.pop();
+    }
+  }
+
+  // List containers are blocks. Keep their surrounding spacing compact only
+  // where the source has one newline, leaving true blank lines untouched.
+  // Compare block tokens at the same nesting level so nested lists work too.
+  const blocksByLevel = new Map();
+  for (const token of tokens) {
+    if (!token.map || !["paragraph_open", "bullet_list_open", "ordered_list_open"].includes(token.type)) continue;
+    const blocks = blocksByLevel.get(token.level) || [];
+    blocks.push(token);
+    blocksByLevel.set(token.level, blocks);
+  }
+
+  const isList = (token) => token.type === "bullet_list_open" || token.type === "ordered_list_open";
+  for (const blocks of blocksByLevel.values()) {
+    for (let i = 1; i < blocks.length; i++) {
+      const previous = blocks[i - 1];
+      const current = blocks[i];
+      if (previous.type === "paragraph_open" && isList(current) && previous.map[1] === current.map[0]) {
+        previous.attrJoin("class", "wmd-list-before");
+        current.attrJoin("class", "wmd-list-joined-before");
+      }
+      if (isList(previous) && current.type === "paragraph_open" &&
+          insertedBlankLines.has(current.map[0] - 1) && previous.map[1] <= current.map[0]) {
+        previous.attrJoin("class", "wmd-list-joined-after");
+        current.attrJoin("class", "wmd-list-after");
+      }
     }
   }
 }
@@ -1470,9 +1505,11 @@ function renderFragment(source, options = {}) {
 }
 
 function renderTab(md, tab, env, config) {
-  const prepared = prepareStyleMarkers(separateListFollowingText(tab.resolvedContent), config.stylePresets);
+  const insertedBlankLines = new Set();
+  const separated = separateListFollowingText(tab.resolvedContent, insertedBlankLines);
+  const prepared = prepareStyleMarkers(separated, config.stylePresets);
   const tokens = md.parse(prepared.markdown, env);
-  markListSpacing(tokens, prepared.markdown);
+  markListSpacing(tokens, prepared.markdown, insertedBlankLines);
   applyHeadingIdsToTokens(tokens, tab.headings);
   applyPresetMarkersToTokens(tokens, prepared.markers);
   return md.renderer.render(tokens, md.options, env);

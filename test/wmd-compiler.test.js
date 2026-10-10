@@ -471,7 +471,7 @@ test("unindented prose following a list starts a separate paragraph", () => {
       assert.ok(listEnd !== -1, "Expected an unordered list");
       assert.match(html.slice(0, listEnd), /FOX[\s\S]*JUMPS/);
       assert.doesNotMatch(html.slice(0, listEnd), /OVER THE/);
-      assert.match(html.slice(listEnd), /^<\/ul>\s*<p>OVER THE<\/p>/);
+      assert.match(html.slice(listEnd), /^<\/ul>\s*<p(?: class="wmd-list-after")?>OVER THE<\/p>/);
     }
   }
 });
@@ -495,9 +495,44 @@ test("indented list continuations and code fences retain their content", () => {
   const listEnd = continuation.html.indexOf("</ul>");
   assert.match(continuation.html.slice(0, listEnd), /JUMPS OVER THE/);
   assert.doesNotMatch(continuation.html.slice(0, listEnd), /AFTER/);
-  assert.match(continuation.html.slice(listEnd), /^<\/ul>\s*<p>AFTER<\/p>/);
+  assert.match(continuation.html.slice(listEnd), /^<\/ul>\s*<p class="wmd-list-after">AFTER<\/p>/);
 
   const fence = String.fromCharCode(96).repeat(3);
   const code = renderFragment([fence + "wmd", "- FOX", "OVER THE", fence].join("\n"));
   assert.match(code.html, /<code class="language-wmd">- FOX\nOVER THE\n<\/code>/);
+});
+
+test("single-newline transitions around lists have compact block margins", () => {
+  const source = "Before list\n- Alpha\n- Beta\nAfter list";
+  const rendered = renderFragment(source);
+  const html = rendered.html;
+
+  assert.match(html, /<p class="wmd-list-before">Before list<\/p>/);
+  assert.match(html, /<ul class="wmd-list wmd-list-joined-before wmd-list-joined-after">/);
+  assert.match(html, /<\/ul>\s*<p class="wmd-list-after">After list<\/p>/);
+  assert.match(rendered.css, /ul\.wmd-list,ol\.wmd-list\{line-height:1\.35\}/);
+  assert.match(rendered.css, /p\.wmd-list-before\{margin-bottom:0\}/);
+  assert.match(rendered.css, /p\.wmd-list-after\{margin-top:0\}/);
+  assert.match(rendered.css, /ul\.wmd-list\.wmd-list-joined-after,ol\.wmd-list\.wmd-list-joined-after\{margin-bottom:0\}/);
+});
+
+test("real blank lines retain paragraph-to-list and list-to-paragraph margins", () => {
+  const before = renderFragment("Before list\n\n- Alpha\n- Beta\nAfter list").html;
+  assert.doesNotMatch(before, /wmd-list-before|wmd-list-joined-before/);
+  assert.match(before, /wmd-list-joined-after/);
+
+  const after = renderFragment("Before list\n- Alpha\n- Beta\n\nAfter list").html;
+  assert.match(after, /wmd-list-before|wmd-list-joined-before/);
+  assert.doesNotMatch(after, /wmd-list-after|wmd-list-joined-after/);
+
+  const both = renderFragment("Before list\n\n- Alpha\n- Beta\n\nAfter list").html;
+  assert.doesNotMatch(both, /wmd-list-before|wmd-list-joined-before|wmd-list-after|wmd-list-joined-after/);
+});
+
+test("numbered lists use compact transitions and honour blank lines", () => {
+  const tight = renderFragment("Before\n1. First\n2. Second\nAfter").html;
+  assert.match(tight, /<ol class="wmd-list wmd-list-joined-before wmd-list-joined-after">/);
+  assert.match(tight, /<p class="wmd-list-after">After<\/p>/);
+  const spaced = renderFragment("1. First\n\n2. Second").html;
+  assert.match(spaced, /<li class="wmd-list-item-spaced">/);
 });

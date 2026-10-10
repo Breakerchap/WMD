@@ -117,7 +117,7 @@ This line can still contain *bold text* or <<a mentioned phrase>>.
 
 ### Lists and line breaks
 
-Consecutive list items stay close together; a blank line between items creates extra vertical spacing:
+Consecutive list items are typeset compactly (including their line-height); a blank line between items creates extra vertical spacing:
 
 ```wmd
 - First item
@@ -126,7 +126,7 @@ Consecutive list items stay close together; a blank line between items creates e
 - Third item
 ```
 
-Text following a list at the same indentation starts a new paragraph even if there is only one line break. To continue the last list item, indent the continuation text:
+Text immediately before or after a list stays close to the list when separated by only one line break. A blank line creates normal paragraph spacing. Text following a list at the same indentation starts a new paragraph even if there is only one line break. To continue the last list item, indent the continuation text:
 
 ```wmd
 - First item
